@@ -28,6 +28,7 @@ int main(int argc, char** argv)
       exit(1);
     }
 
+	gets(buf);
 
   /*
     Open serial port device for reading and writing and not as controlling tty
@@ -52,7 +53,7 @@ int main(int argc, char** argv)
     newtio.c_lflag = 0;
 
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
 
 
@@ -74,22 +75,29 @@ int main(int argc, char** argv)
 
 
 
-    for (i = 0; i < 255; i++) {
+    /*for (i = 0; i < 255; i++) {
       buf[i] = 'a';
-    }
+    }*/
     
     /*testing*/
-    buf[25] = '\n';
+    //buf[25] = '\n';
     
-    res = write(fd,buf,255);   
+    res = write(fd,buf, strlen(buf)+1);   
     printf("%d bytes written\n", res);
- 
 
   /* 
     O ciclo FOR e as instruções seguintes devem ser alterados de modo a respeitar 
     o indicado no guião 
   */
 
+i =0;
+while(STOP == FALSE){
+	res = read(fd,&buf[i], 1);
+	if(buf[i]== '\0')
+		STOP =TRUE;
+	i+= res;
+}
+printf("%s\n",buf);
 
 
    

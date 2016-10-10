@@ -50,7 +50,7 @@ int main(int argc, char** argv)
     newtio.c_lflag = 0;
 
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
 
 
@@ -68,15 +68,24 @@ int main(int argc, char** argv)
       exit(-1);
     }
 
-    printf("New termios structure set\n");
-
+    //printf("New termios structure set\n");
+	int i = 0;
 
     while (STOP==FALSE) {       /* loop for input */
-      res = read(fd,buf,255);   /* returns after 5 chars have been input */
-      buf[res]=0;               /* so we can printf... */
-      printf(":%s:%d\n", buf, res);
-      if (buf[0]=='z') STOP=TRUE;
+      res = read(fd,&buf[i],1);   /* returns after 5 chars have been input */
+      //buf[res]='\0';                /* so we can printf... */
+   	if (buf[i]=='\0') STOP=TRUE;
+	i += res;
+
+      
     }
+printf("%s\n", buf);
+write(fd, buf, strlen(buf)+1);
+
+
+
+   
+
 
 
 
