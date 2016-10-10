@@ -5,97 +5,148 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #define BAUDRATE B38400
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 #define FALSE 0
 #define TRUE 1
+#define TRANSMITTER 0
+#define RECEIVER 1
+#define SET_AND_UA_SIZE 5
+#define F 0X7E
+#define A 0x03
+#define C_UA 0X07
+#define C_SET 0x03
+#define START 0
+#define FLAG_RCV 1
+#define A_RCV 2
+#define C_RCV 3
+#define BCC_OK 4
+#define STOP_SM 5
 
-volatile int STOP=FALSE;
+volatile int STOP = FALSE;
+
+int llopen(int porta /*, TRANSMITTER | RECEIVER*/) {
+
+	unsigned char SET_char;
+	int state = START;
+	while (state != STOP_SM) {
+		if (read(porta, &SET_char, 1) != 1)    /* returns after 1 chars have been input */
+			printf("A problem occurred reading a 'SET_char' on 'llopen'.\n");
+		switch (state) {
+		case START:
+			if (SET_char == F)
+				state = FLAG_RCV;
+			//else state = START;
+			break;
+		case FLAG_RCV:
+			if (SET_char == A)
+				state = A_RCV;
+			else if (SET_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case A_RCV:
+			if (SET_char == C_SET)
+				state = C_RCV;
+			else if (SET_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case C_RCV:
+			if (SET_char == (A ^ C_SET))
+				state = BCC_OK;
+			else if (SET_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case BCC_OK:
+			if (SET_char == F)
+				state = STOP_SM;
+			else state = START;
+			break;
+		}
+	}
+
+	unsigned char UA[SET_AND_UA_SIZE];
+	UA[0] = F;
+	UA[1] = A;
+	UA[2] = C_UA;
+	UA[3] = UA[1] ^ UA[2];
+	UA[4] = F;
+	int tr = write(porta, UA, SET_AND_UA_SIZE);
+
+	return (tr == SET_AND_UA_SIZE) ? 0 : -1;
+}
 
 int main(int argc, char** argv)
 {
-    int fd,c, res;
-    struct termios oldtio,newtio;
-    char buf[255];
+	int fd, c, res;
+	struct termios oldtio, newtio;
+	char buf[255];
 
-    if ( (argc < 2) || 
-  	     ((strcmp("/dev/ttyS0", argv[1])!=0) && 
-  	      (strcmp("/dev/ttyS1", argv[1])!=0) )) {
-      printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
-      exit(1);
-    }
+	if ((argc < 2) ||
+		((strcmp("/dev/ttyS0", argv[1]) != 0) &&
+		(strcmp("/dev/ttyS1", argv[1]) != 0))) {
+		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+		exit(1);
+	}
 
+	/*
+	  Open serial port device for reading and writing and not as controlling tty
+	  because we don't want to get killed if linenoise sends CTRL-C.
+	*/
+
+	fd = open(argv[1], O_RDWR | O_NOCTTY);
+	if (fd < 0) { perror(argv[1]); exit(-1); }
+
+	if (tcgetattr(fd, &oldtio) == -1) { /* save current port settings */
+		perror("tcgetattr");
+		exit(-1);
+	}
+
+	bzero(&newtio, sizeof(newtio));
+	newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+	newtio.c_iflag = IGNPAR;
+	newtio.c_oflag = 0;
+
+	/* set input mode (non-canonical, no echo,...) */
+	newtio.c_lflag = 0;
+
+	newtio.c_cc[VTIME] = 0;   /* inter-character timer unused */
+	newtio.c_cc[VMIN] = 1;   /* blocking read until 1 char received */
 
   /*
-    Open serial port device for reading and writing and not as controlling tty
-    because we don't want to get killed if linenoise sends CTRL-C.
-  */
-  
-    
-    fd = open(argv[1], O_RDWR | O_NOCTTY );
-    if (fd <0) {perror(argv[1]); exit(-1); }
-
-    if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
-      perror("tcgetattr");
-      exit(-1);
-    }
-
-    bzero(&newtio, sizeof(newtio));
-    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
-    newtio.c_iflag = IGNPAR;
-    newtio.c_oflag = 0;
-
-    /* set input mode (non-canonical, no echo,...) */
-    newtio.c_lflag = 0;
-
-    newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
-
-
-
-  /* 
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a 
-    leitura do(s) próximo(s) caracter(es)
+	VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
+	leitura do(s) próximo(s) caracter(es)
   */
 
+	tcflush(fd, TCIOFLUSH);
 
+	if (tcsetattr(fd, TCSANOW, &newtio) == -1) {
+		perror("tcsetattr");
+		exit(-1);
+	}
 
-    tcflush(fd, TCIOFLUSH);
+	printf("New termios structure set\n");
 
-    if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
-      perror("tcsetattr");
-      exit(-1);
-    }
+	if (llopen(fd) == -1)
+		printf("Error occurred executing 'llopen'.\n");
 
-    //printf("New termios structure set\n");
 	int i = 0;
+	while (STOP == FALSE) {       /* loop for input */
+		res = read(fd, &buf[i], 1);   /* returns after 1 chars have been input */
+		if (buf[i] == '\0') STOP = TRUE;
+		i += res;
+	}
+	printf("%s\n", buf);
 
-    while (STOP==FALSE) {       /* loop for input */
-      res = read(fd,&buf[i],1);   /* returns after 5 chars have been input */
-      //buf[res]='\0';                /* so we can printf... */
-   	if (buf[i]=='\0') STOP=TRUE;
-	i += res;
+	write(fd, buf, strlen(buf) + 1);
 
-      
-    }
-printf("%s\n", buf);
-write(fd, buf, strlen(buf)+1);
-
-
-
-   
-
-
-
-
-  /* 
-    O ciclo WHILE deve ser alterado de modo a respeitar o indicado no guião 
-  */
-
-
-
-    tcsetattr(fd,TCSANOW,&oldtio);
-    close(fd);
-    return 0;
+	tcsetattr(fd, TCSANOW, &oldtio);
+	close(fd);
+	return 0;
 }
