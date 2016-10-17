@@ -18,19 +18,24 @@
 #define SET_AND_UA_SIZE 5
 #define F 0X7E
 #define A 0x03
-#define C_UA 0X07
 #define C_SET 0x03
+#define C_DISC  0xOb
+#define C_UA 0X07
+#define C_SEND(S) (S << 6)
+#define C_RR(R) ((R << 7) | 0x05)
+#define C_REJ(R) ((R << 7) | 0x01)
 #define START 0
 #define FLAG_RCV 1
 #define A_RCV 2
 #define C_RCV 3
 #define BCC_OK 4
 #define STOP_SM 5
+#define BCC1_RCV 6
+#define RCV_DATA 7
+#define BCC2_RCV 8
 
-volatile int STOP = FALSE;
-
-int llopen(int porta /*, TRANSMITTER | RECEIVER*/) {
-
+int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
+{
 	unsigned char SET_char;
 	int state = START;
 	while (state != STOP_SM) {
@@ -81,6 +86,82 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/) {
 
 	return (tr == SET_AND_UA_SIZE) ? 0 : -1;
 }
+
+volatile int pos = 0;
+
+int llread(int fd, char * buffer)	// doesn't receive resends and doesn't ask for resends
+{
+	printf("Data layer reading 'information frame' from the serial conexion.\n");
+	int state = START, i = 0, parity = 0xff;
+	unsigned char ch;
+	while (state != STOP_SM) {
+		if (read(fd, &ch, 1) != 1) {
+			printf("A problem occurred reading on 'llread'.\n");
+		}
+		switch (state) {
+		case START:
+			if (ch == F)
+				state = FLAG_RCV;
+			// else state = START;
+			break;
+		case FLAG_RCV:
+			if (ch == A)
+				state = A_RCV;
+			else if (ch == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case A_RCV:
+			if (ch == C_SEND(pos))
+				state = C_RCV;
+			else if (ch == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case C_RCV:
+			if (ch == (A ^ C_SEND(pos)))	// BCC1
+				state = RCV_DATA;
+			else if (ch == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case RCV_DATA:
+			if (ch == parity)	// BCC2
+				state = BCC2_RCV;
+			buffer[i] = ch;
+			parity = (parity ^ buffer[i]);
+			i++;
+			break;
+		case BCC2_RCV:
+			if (ch == F) {
+				state = STOP_SM;
+				i--;	// delete last read char
+			}
+			else {
+				buffer[i] = ch;
+				parity = (parity ^ buffer[i]);
+				i++;
+				state = RCV_DATA;
+			}
+			break;
+		}
+	}
+
+	pos = (pos + 1) % 2;
+
+	//supervision
+	unsigned char SP[5];
+	SP[0] = F;
+	SP[1] = A;
+	SP[2] = C_RR(pos);	// or C_REJ(other pos)
+	SP[3] = SP[1] ^ SP[2];
+	SP[4] = F;
+	write(fd, SP, 5);
+
+	return i;
+}
+
+volatile int STOP = FALSE;
 
 int main(int argc, char** argv)
 {
@@ -136,12 +217,7 @@ int main(int argc, char** argv)
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
 
-	int i = 0;
-	while (STOP == FALSE) {       /* loop for input */
-		res = read(fd, &buf[i], 1);   /* returns after 1 chars have been input */
-		if (buf[i] == '\0') STOP = TRUE;
-		i += res;
-	}
+	llread(fd, buf);
 	printf("%s\n", buf);
 
 	write(fd, buf, strlen(buf) + 1);

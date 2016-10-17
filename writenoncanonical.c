@@ -21,7 +21,11 @@
 #define F 0X7e
 #define A 0x03
 #define C_SET 0x03
+#define c_DISC 0x0b
 #define C_UA 0x07
+#define C_SEND(S) (S << 6)
+#define C_RR(R) ((R << 7) | 0x05)
+#define C_REJ(R) ((R << 7) | 0x01)
 #define START 0
 #define FLAG_RCV 1
 #define A_RCV 2
@@ -29,6 +33,7 @@
 #define BCC_OK 4
 #define STOP_SM 5
 #define TIME_OUT 3
+#define BCC1_RCV 6
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd;
 unsigned char SET[SET_AND_UA_SIZE];	// to be used by 'answer_alarm' and 'llopen'
@@ -56,7 +61,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	SET[3] = SET[1] ^ SET[2];
 	SET[4] = F;
 	int tr = write(write_fd, SET, SET_AND_UA_SIZE);
-	(void)signal(SIGALRM, answer_alarm);	// mantain here?
+
 	alarm(TIME_OUT);
 	alarm_on = TRUE;
 
@@ -104,10 +109,87 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	return (tr == SET_AND_UA_SIZE) ? 0 : -1;
 }
 
+volatile int pos = 0;	// can be 0 or 1, it is used by llwrite
+
+int llwrite(int fd, char *buffer, int length)
+{
+	int originalPos = pos;
+	while (originalPos == pos) {
+		printf("Data layer writing 'information frame' to the serial conexion.\n");
+		unsigned char header[4];
+		header[0] = F;
+		header[1] = A;
+		header[2] = C_SEND(pos);
+		header[3] = (header[1] ^ header[2]);		// BCC1
+
+		write(fd, header, 4);
+		write(fd, buffer, length);
+
+		int i, parity = 0xff;
+		for (i = 0; i < length; i++)
+			parity = (parity ^ buffer[i]);
+		unsigned char trailer[2];
+		trailer[0] = parity; // BCC2
+		trailer[1] = F;
+		write(fd, trailer, 2);
+
+		pos = (pos + 1) % 2;
+
+		printf("Data layer reading 'supervision frame' from the serial conexion.\n");
+		unsigned char ch;
+		int state = START;
+		while (state != STOP_SM) {
+			if (read(fd, &ch, 1) != 1)
+				printf("A problem occurred reading a byte on 'llwrite'.\n");
+			switch (state) {
+			case START:
+				if (ch == F)
+					state = FLAG_RCV;
+				//else state = START;
+				break;
+			case FLAG_RCV:
+				if (ch == A)
+					state = A_RCV;
+				else if (ch == F)
+					state = FLAG_RCV;
+				else state = START;
+				break;
+			case A_RCV:
+				if (ch == C_RR(pos))
+					state = C_RCV;
+				else if (ch == C_REJ((pos + 1) % 2)) {
+					state = C_RCV;
+					pos = (pos + 1) % 2;	// to receive all the data again
+				}
+				else if (ch == F)
+					state = FLAG_RCV;
+				else state = START;
+				break;
+			case C_RCV:
+				if (ch == (header[1] ^ C_RR(pos)) || ch == (header[1] ^ C_REJ((pos + 1) % 2)))	// new 'pos'
+					state = BCC1_RCV;
+				else if (ch == F)
+					state = FLAG_RCV;
+				else state = START;
+				break;
+			case BCC1_RCV:
+				if (ch == F)
+					state = STOP_SM;
+				else state = START;
+				break;
+			}
+		}
+	}
+
+	return 0;
+}
+
 volatile int STOP = FALSE;
 
 int main(int argc, char** argv)
 {
+	(void)signal(SIGALRM, answer_alarm);
+
 	int fd, c, res;
 	struct termios oldtio, newtio;
 	char buf[255];
@@ -126,7 +208,6 @@ int main(int argc, char** argv)
 	  Open serial port device for reading and writing and not as controlling tty
 	  because we don't want to get killed if linenoise sends CTRL-C.
 	*/
-
 
 	fd = open(argv[1], O_RDWR | O_NOCTTY);
 	if (fd < 0) { perror(argv[1]); exit(-1); }
@@ -163,9 +244,10 @@ int main(int argc, char** argv)
 
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
+	llwrite(fd, buf, strlen(buf) + 1);
 
-	res = write(fd, buf, strlen(buf) + 1);
-	printf("%d bytes written\n", res);
+	//res = write(fd, buf, strlen(buf) + 1);
+	//printf("%d bytes written\n", res);
 
 	i = 0;
 	while (STOP == FALSE) {
