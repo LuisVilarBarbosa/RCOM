@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,26 @@
 #define BCC1_RCV 6
 #define RCV_DATA 7
 #define BCC2_RCV 8
+#define TIME_OUT 100
+
+volatile int pos = 0;
+
+volatile int alarm_on = FALSE, alarm_calls = 0, write_fd;
+
+
+void answer_alarm()
+{
+	if (alarm_on == TRUE) {
+		alarm_calls++;
+		sendSupervision();
+		printf("Resend %d of 'SET'.\n", alarm_calls);
+
+		if (alarm_calls < 3)	// to resend 'SET' 3 times
+			alarm(TIME_OUT*2);
+		else
+			alarm_on = FALSE;
+	}
+}
 
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 {
@@ -87,13 +108,16 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	return (tr == SET_AND_UA_SIZE) ? 0 : -1;
 }
 
-volatile int pos = 0;
+
 
 int llread(int fd, char * buffer)	// doesn't receive resends and doesn't ask for resends
 {
 	printf("Data layer reading 'information frame' from the serial conexion.\n");
 	int state = START, i = 0, parity = 0xff;
 	unsigned char ch;
+	write_fd = fd;
+	alarm(TIME_OUT);
+	alarm_on = TRUE;
 	while (state != STOP_SM) {
 		if (read(fd, &ch, 1) != 1) {
 			printf("A problem occurred reading on 'llread'.\n");
@@ -128,6 +152,12 @@ int llread(int fd, char * buffer)	// doesn't receive resends and doesn't ask for
 		case RCV_DATA:
 			if (ch == parity)	// BCC2
 				state = BCC2_RCV;
+			if(ch == 0x7d){
+				if (read(fd, &ch, 1) != 1) {
+					printf("A problem occurred reading on 'llread'.\n");
+					}
+				ch = ch ^ 0x20;
+			}
 			buffer[i] = ch;
 			parity = (parity ^ buffer[i]);
 			i++;
@@ -146,28 +176,37 @@ int llread(int fd, char * buffer)	// doesn't receive resends and doesn't ask for
 			break;
 		}
 	}
+	printf("chegou ao fim");
+	alarm_on = FALSE;
 
 	pos = (pos + 1) % 2;
 
 	//supervision
+	sendSupervision();
+
+	return i;
+}
+
+
+void sendSupervision(){
 	unsigned char SP[5];
 	SP[0] = F;
 	SP[1] = A;
 	SP[2] = C_RR(pos);	// or C_REJ(other pos)
 	SP[3] = SP[1] ^ SP[2];
 	SP[4] = F;
-	write(fd, SP, 5);
-
-	return i;
+	write(write_fd, SP, 5);
 }
 
 volatile int STOP = FALSE;
 
 int main(int argc, char** argv)
 {
+	(void)signal(SIGALRM, answer_alarm);
+
 	int fd, c, res;
 	struct termios oldtio, newtio;
-	char buf[255];
+	char buf[6000];
 
 	if ((argc < 2) ||
 		((strcmp("/dev/ttyS0", argv[1]) != 0) &&
@@ -202,7 +241,7 @@ int main(int argc, char** argv)
 
   /*
 	VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-	leitura do(s) próximo(s) caracter(es)
+	leitura do(s) prÃ³ximo(s) caracter(es)
   */
 
 	tcflush(fd, TCIOFLUSH);
@@ -217,11 +256,20 @@ int main(int argc, char** argv)
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
 
-	llread(fd, buf);
-	printf("%s\n", buf);
 
-	write(fd, buf, strlen(buf) + 1);
+	int imageFd;
+	imageFd = open("pinguim.gif", O_WRONLY | O_CREAT | O_EXCL, 0644);
+	char a[10968];
 
+	llread(fd, a);
+
+	write(imageFd, a, 10968);
+	close(imageFd);
+
+	//printf("%s\n", buf);
+	printf("ok\n");
+
+	//write(fd, buf, strlen(buf) + 1);
 	tcsetattr(fd, TCSANOW, &oldtio);
 	close(fd);
 	return 0;
