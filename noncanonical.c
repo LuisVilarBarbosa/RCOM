@@ -259,7 +259,7 @@ int main(int argc, char** argv)
 
 	int imageFd;
 	imageFd = open("pinguim.gif", O_WRONLY | O_CREAT | O_EXCL, 0644);
-	char a[10968];
+	char a[12000];
 
 	llread(fd, a);
 
