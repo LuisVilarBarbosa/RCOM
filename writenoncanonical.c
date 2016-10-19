@@ -34,6 +34,7 @@
 #define STOP_SM 5
 #define TIME_OUT 3
 #define BCC1_RCV 6
+#define ESC 0x7d
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd;
 unsigned char SET[SET_AND_UA_SIZE];	// to be used by 'answer_alarm' and 'llopen'
@@ -123,18 +124,30 @@ int llwrite(int fd, char *buffer, int length)
 		header[3] = (header[1] ^ header[2]);		// BCC1
 
 		write(fd, header, 4);
-		write(fd, buffer, length);
-
-		int i, parity = 0xff;
-		for (i = 0; i < length; i++)
+		int i;
+		for (i = 0; i < length; i++){
+			
+			if(buffer[i] == 0x7d || buffer[i] == 0x7e){
+				unsigned char escape = ESC;
+				write(fd, &escape, 1);
+				unsigned char flag = buffer[i]^0x20;
+				write(fd, &flag, 1);
+			}else{
+				write(fd, &buffer[i], 1);
+			}
+		}
+		int parity = 0xff;
+		for (i = 0; i < length; i++){
 			parity = (parity ^ buffer[i]);
+		}
+
 		unsigned char trailer[2];
 		trailer[0] = parity; // BCC2
 		trailer[1] = F;
 		write(fd, trailer, 2);
 
 		pos = (pos + 1) % 2;
-
+		sleep(3);
 		printf("Data layer reading 'supervision frame' from the serial conexion.\n");
 		unsigned char ch;
 		int state = START;
@@ -201,8 +214,8 @@ int main(int argc, char** argv)
 		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
 		exit(1);
 	}
-
-	gets(buf);
+	
+	//gets(buf);
 
 	/*
 	  Open serial port device for reading and writing and not as controlling tty
@@ -230,7 +243,7 @@ int main(int argc, char** argv)
 
   /*
 	VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-	leitura do(s) próximo(s) caracter(es)
+	leitura do(s) prÃ³ximo(s) caracter(es)
   */
 
 	tcflush(fd, TCIOFLUSH);
@@ -241,22 +254,34 @@ int main(int argc, char** argv)
 	}
 
 	printf("New termios structure set\n");
-
+	
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
-	llwrite(fd, buf, strlen(buf) + 1);
+
+
+	int imageFd;
+	imageFd = open("pinguim.gif", O_RDONLY);
+	char a[10968];
+	int z;
+	for(z = 0; z < 10968; z++){
+		read(imageFd,&a[z], 1);
+	}
+	close(imageFd);
+
+	llwrite(fd, a, 10968);
 
 	//res = write(fd, buf, strlen(buf) + 1);
 	//printf("%d bytes written\n", res);
 
-	i = 0;
+
+	/*i = 0;
 	while (STOP == FALSE) {
 		res = read(fd, &buf[i], 1);
 		if (buf[i] == '\0')
 			STOP = TRUE;
 		i += res;
 	}
-	printf("%s\n", buf);
+	printf("%s\n", buf);*/
 
 	if (tcsetattr(fd, TCSANOW, &oldtio) == -1) {
 		perror("tcsetattr");
