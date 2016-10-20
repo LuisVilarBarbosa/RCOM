@@ -18,10 +18,11 @@
 #define TRANSMITTER 0
 #define RECEIVER 1
 #define SET_AND_UA_SIZE 5
+#define DISC_AND_UA_SIZE 5
 #define F 0X7e
 #define A 0x03
 #define C_SET 0x03
-#define c_DISC 0x0b
+#define C_DISC 0x0B
 #define C_UA 0x07
 #define C_SEND(S) (S << 6)
 #define C_RR(R) ((R << 7) | 0x05)
@@ -51,6 +52,69 @@ void answer_alarm()
 		else
 			alarm_on = FALSE;
 	}
+}
+
+int llclose(int porta){
+	write_fd = porta;
+	DISC[0] = F;
+	DISC[1] = A;
+	DISC[2] = C_DISC;
+	DISC[3] = DISC[1] ^ DISC[2];
+	DISC[4] = F;
+	int tr_DISC = write(write_fd, DISC, DISC_AND_UA_SIZE);
+
+	alarm(TIME_OUT);
+	alarm_on = TRUE;
+
+	unsigned char DISC_char;
+	int state = START;
+	while (state != STOP_SM) {
+		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
+			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
+		switch (state) {
+		case START:
+			if (DISC_char == F)
+				state = FLAG_RCV;
+			//else state = START;
+			break;
+		case FLAG_RCV:
+			if (DISC_char == A)
+				state = A_RCV;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case A_RCV:
+			if (DISC_char == C_DISC)
+				state = C_RCV;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case C_RCV:
+			if (DISC_char == (A ^ C_DISC))
+				state = BCC_OK;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case BCC_OK:
+			if (DISC_char == F)
+				state = STOP_SM;
+			else state = START;
+			break;
+		}
+	}
+	unsigned char UA[DISC_AND_UA_SIZE];
+	UA[0] = F;
+	UA[1] = A;
+	UA[2] = C_UA;
+	UA[3] = UA[1] ^ UA[2];
+	UA[4] = F;
+	int tr_UA = write(porta, UA, DISC_AND_UA_SIZE);
+	alarm_on = FALSE;
+
+	return (tr_DISC == DISC_AND_UA_SIZE && tr_UA == DISC_AND_UA_SIZE) ? 0 : -1;
 }
 
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
@@ -243,7 +307,7 @@ int main(int argc, char** argv)
 
   /*
 	VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-	leitura do(s) próximo(s) caracter(es)
+	leitura do(s) prÃ³ximo(s) caracter(es)
   */
 
 	tcflush(fd, TCIOFLUSH);
