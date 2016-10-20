@@ -17,6 +17,7 @@
 #define TRANSMITTER 0
 #define RECEIVER 1
 #define SET_AND_UA_SIZE 5
+#define DISC_AND_UA_SIZE 5
 #define F 0X7E
 #define A 0x03
 #define C_SET 0x03
@@ -53,6 +54,100 @@ void answer_alarm()
 		else
 			alarm_on = FALSE;
 	}
+}
+
+int llclose(int porta){
+	int write_fd = porta;
+	unsigned char DISC_char;
+	int state = START;
+	while (state != STOP_SM) {
+		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
+			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
+		switch (state) {
+		case START:
+			if (DISC_char == F)
+				state = FLAG_RCV;
+			//else state = START;
+			break;
+		case FLAG_RCV:
+			if (DISC_char == A)
+				state = A_RCV;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case A_RCV:
+			if (DISC_char == C_DISC)
+				state = C_RCV;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case C_RCV:
+			if (DISC_char == (A ^ C_DISC))
+				state = BCC_OK;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case BCC_OK:
+			if (DISC_char == F)
+				state = STOP_SM;
+			else state = START;
+			break;
+		}
+	}
+
+	unsigned char DISC[DISC_AND_UA_SIZE];
+	DISC[0] = F;
+	DISC[1] = A;
+	DISC[2] = C_DISC;
+	DISC[3] = DISC[1] ^ DISC[2];
+	DISC[4] = F;
+	int tr = write(porta, DISC, DISC_AND_UA_SIZE);
+
+	unsigned char UA_char;
+	int state = START;
+	while (state != STOP_SM) {
+		if (read(write_fd, &UA_char, 1) != 1)    /* returns after 1 chars have been input */
+			printf("A problem occurred reading a 'UA_char' on 'llclose'.\n");
+		switch (state) {
+		case START:
+			if (UA_char == F)
+				state = FLAG_RCV;
+			//else state = START;
+			break;
+		case FLAG_RCV:
+			if (UA_char == A)
+				state = A_RCV;
+			else if (UA_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case A_RCV:
+			if (UA_char == C_UA)
+				state = C_RCV;
+			else if (UA_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case C_RCV:
+			if (UA_char == (A ^ C_UA))
+				state = BCC_OK;
+			else if (UA_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case BCC_OK:
+			if (UA_char == F)
+				state = STOP_SM;
+			else state = START;
+			break;
+		}
+	}
+
+	return (tr == DISC_AND_UA_SIZE) ? 0 : -1;
+
 }
 
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
@@ -271,6 +366,6 @@ int main(int argc, char** argv)
 
 	//write(fd, buf, strlen(buf) + 1);
 	tcsetattr(fd, TCSANOW, &oldtio);
-	close(fd);
+	llclose(fd);
 	return 0;
 }
