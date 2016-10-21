@@ -374,12 +374,13 @@ int main(int argc, char** argv)
 		printf("Error occurred executing 'llopen'.\n");
 
 	int dataFd = open("pinguim.gif", O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666);
-	unsigned char data[MAX_SIZE];
+	unsigned char fileData[MAX_SIZE];
+
 	int i = 0;
 	while (i < MAX_SIZE)
-		i += llread(fd, &data[i]);
+		i += llread(fd, &fileData[i]);
 
-	write(dataFd, data, i);
+	write(dataFd, fileData, i);
 	close(dataFd);
 
 	//printf("%s\n", buf);

@@ -343,10 +343,11 @@ int main(int argc, char** argv)
 
 
 	int dataFd = open("pinguim.gif", O_RDONLY);
-	unsigned char data[MAX_SIZE];
+	unsigned char fileData[MAX_SIZE];
 	int i;
-	for (i = 0; i < MAX_SIZE && read(dataFd, &data[i], 1); i++)
-		llwrite(fd, &data[i], 1);
+
+	for (i = 0; i < MAX_SIZE && read(dataFd, &fileData[i], 1); i++)
+		llwrite(fd, &fileData[i], 1);
 	close(dataFd);
 
 
