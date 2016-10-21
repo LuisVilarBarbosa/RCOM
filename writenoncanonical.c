@@ -19,10 +19,10 @@
 #define RECEIVER 1
 #define SET_AND_UA_SIZE 5
 #define DISC_AND_UA_SIZE 5
-#define F 0X7e
+#define F 0x7e
 #define A 0x03
 #define C_SET 0x03
-#define C_DISC 0x0B
+#define C_DISC 0x0b
 #define C_UA 0x07
 #define C_SEND(S) (S << 6)
 #define C_RR(R) ((R << 7) | 0x05)
@@ -33,103 +33,51 @@
 #define C_RCV 3
 #define BCC_OK 4
 #define STOP_SM 5
-#define TIME_OUT 3
 #define BCC1_RCV 6
+#define TIME_OUT 3
 #define ESC 0x7d
+#define MAX_SIZE 1048576	/* 1MB */
 
-volatile int alarm_on = FALSE, alarm_calls = 0, write_fd;
-unsigned char SET[SET_AND_UA_SIZE];	// to be used by 'answer_alarm' and 'llopen'
+volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
+unsigned char data[MAX_SIZE];
+
+void alarmOn() {
+	alarm_on = TRUE;
+	alarm_calls = 0;
+	alarm(TIME_OUT);
+}
+
+void alarmOff() {
+	alarm_on = FALSE;
+}
 
 void answer_alarm()
 {
 	if (alarm_on == TRUE) {
 		alarm_calls++;
-		write(write_fd, SET, SET_AND_UA_SIZE);
-		printf("Resend %d of 'SET'.\n", alarm_calls);
+		write(write_fd, data, data_size);
+		printf("Resend %d of the data.\n", alarm_calls);
 
-		if (alarm_calls < 3)	// to resend 'SET' 3 times
+		if (alarm_calls < 3)	// to resend the data 3 times
 			alarm(TIME_OUT);
 		else
 			alarm_on = FALSE;
 	}
 }
 
-int llclose(int porta){
-	write_fd = porta;
-	DISC[0] = F;
-	DISC[1] = A;
-	DISC[2] = C_DISC;
-	DISC[3] = DISC[1] ^ DISC[2];
-	DISC[4] = F;
-	int tr_DISC = write(write_fd, DISC, DISC_AND_UA_SIZE);
-
-	alarm(TIME_OUT);
-	alarm_on = TRUE;
-
-	unsigned char DISC_char;
-	int state = START;
-	while (state != STOP_SM) {
-		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
-			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
-		switch (state) {
-		case START:
-			if (DISC_char == F)
-				state = FLAG_RCV;
-			//else state = START;
-			break;
-		case FLAG_RCV:
-			if (DISC_char == A)
-				state = A_RCV;
-			else if (DISC_char == F)
-				state = FLAG_RCV;
-			else state = START;
-			break;
-		case A_RCV:
-			if (DISC_char == C_DISC)
-				state = C_RCV;
-			else if (DISC_char == F)
-				state = FLAG_RCV;
-			else state = START;
-			break;
-		case C_RCV:
-			if (DISC_char == (A ^ C_DISC))
-				state = BCC_OK;
-			else if (DISC_char == F)
-				state = FLAG_RCV;
-			else state = START;
-			break;
-		case BCC_OK:
-			if (DISC_char == F)
-				state = STOP_SM;
-			else state = START;
-			break;
-		}
-	}
-	unsigned char UA[DISC_AND_UA_SIZE];
-	UA[0] = F;
-	UA[1] = A;
-	UA[2] = C_UA;
-	UA[3] = UA[1] ^ UA[2];
-	UA[4] = F;
-	int tr_UA = write(porta, UA, DISC_AND_UA_SIZE);
-	alarm_on = FALSE;
-
-	return (tr_DISC == DISC_AND_UA_SIZE && tr_UA == DISC_AND_UA_SIZE) ? 0 : -1;
-}
-
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 {
 	write_fd = porta;
-	SET[0] = F;
-	SET[1] = A;
-	SET[2] = C_SET;
-	SET[3] = SET[1] ^ SET[2];
-	SET[4] = F;
-	int tr = write(write_fd, SET, SET_AND_UA_SIZE);
 
-	alarm(TIME_OUT);
-	alarm_on = TRUE;
+	data[0] = F;
+	data[1] = A;
+	data[2] = C_SET;
+	data[3] = data[1] ^ data[2];
+	data[4] = F;
+	data_size = SET_AND_UA_SIZE;
+	int tr = write(write_fd, data, data_size);
 
+	alarmOn();
 	unsigned char UA_char;
 	int state = START;
 	while (state != STOP_SM) {
@@ -169,50 +117,58 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 			break;
 		}
 	}
-	alarm_on = FALSE;
+	alarmOff();
 
-	return (tr == SET_AND_UA_SIZE) ? 0 : -1;
+	return (tr == data_size) ? 0 : -1;
 }
 
 volatile int pos = 0;	// can be 0 or 1, it is used by llwrite
 
-int llwrite(int fd, char *buffer, int length)
+int llwrite(int fd, unsigned char *buffer, int length)
 {
+	write_fd = fd;
+
 	int originalPos = pos;
 	while (originalPos == pos) {
 		printf("Data layer writing 'information frame' to the serial conexion.\n");
-		unsigned char header[4];
-		header[0] = F;
-		header[1] = A;
-		header[2] = C_SEND(pos);
-		header[3] = (header[1] ^ header[2]);		// BCC1
+		// Header
+		data[0] = F;
+		data[1] = A;
+		data[2] = C_SEND(pos);
+		data[3] = (data[1] ^ data[2]);		// BCC1
+		data_size = 4;
 
-		write(fd, header, 4);
+		// Data from the application level
 		int i;
-		for (i = 0; i < length; i++){
-			
-			if(buffer[i] == 0x7d || buffer[i] == 0x7e){
-				unsigned char escape = ESC;
-				write(fd, &escape, 1);
-				unsigned char flag = buffer[i]^0x20;
-				write(fd, &flag, 1);
-			}else{
-				write(fd, &buffer[i], 1);
+		for (i = 0; i < length; i++) {
+			if (buffer[i] == ESC || buffer[i] == F) {
+				data[data_size] = ESC;
+				data_size++;
+				unsigned char flag = buffer[i] ^ 0x20;
+				data[data_size] = flag;
+				data_size++;
+			}
+			else {
+				data[data_size] = buffer[i];
+				data_size++;
 			}
 		}
 		int parity = 0xff;
-		for (i = 0; i < length; i++){
+		for (i = 0; i < length; i++) {
 			parity = (parity ^ buffer[i]);
 		}
 
-		unsigned char trailer[2];
-		trailer[0] = parity; // BCC2
-		trailer[1] = F;
-		write(fd, trailer, 2);
+		// Trailer;
+		data[data_size] = parity; // BCC2
+		data_size++;
+		data[data_size] = F;
+		data_size++;
+		write(write_fd, data, data_size);
 
 		pos = (pos + 1) % 2;
-		sleep(3);
+
 		printf("Data layer reading 'supervision frame' from the serial conexion.\n");
+		alarmOn();
 		unsigned char ch;
 		int state = START;
 		while (state != STOP_SM) {
@@ -243,7 +199,7 @@ int llwrite(int fd, char *buffer, int length)
 				else state = START;
 				break;
 			case C_RCV:
-				if (ch == (header[1] ^ C_RR(pos)) || ch == (header[1] ^ C_REJ((pos + 1) % 2)))	// new 'pos'
+				if (ch == (A ^ C_RR(pos)) || ch == (A ^ C_REJ(pos)))
 					state = BCC1_RCV;
 				else if (ch == F)
 					state = FLAG_RCV;
@@ -256,9 +212,74 @@ int llwrite(int fd, char *buffer, int length)
 				break;
 			}
 		}
+		alarmOff();
 	}
 
 	return 0;
+}
+
+int llclose(int porta) {
+	write_fd = porta;
+
+	data[0] = F;
+	data[1] = A;
+	data[2] = C_DISC;
+	data[3] = data[1] ^ data[2];
+	data[4] = F;
+	data_size = DISC_AND_UA_SIZE;
+	int tr_DISC = write(write_fd, data, data_size);
+
+	alarmOn();
+	unsigned char DISC_char;
+	int state = START;
+	while (state != STOP_SM) {
+		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
+			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
+		switch (state) {
+		case START:
+			if (DISC_char == F)
+				state = FLAG_RCV;
+			//else state = START;
+			break;
+		case FLAG_RCV:
+			if (DISC_char == A)
+				state = A_RCV;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case A_RCV:
+			if (DISC_char == C_DISC)
+				state = C_RCV;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case C_RCV:
+			if (DISC_char == (A ^ C_DISC))
+				state = BCC_OK;
+			else if (DISC_char == F)
+				state = FLAG_RCV;
+			else state = START;
+			break;
+		case BCC_OK:
+			if (DISC_char == F)
+				state = STOP_SM;
+			else state = START;
+			break;
+		}
+	}
+	alarmOff();
+
+	data[0] = F;
+	data[1] = A;
+	data[2] = C_UA;
+	data[3] = data[1] ^ data[2];
+	data[4] = F;
+	data_size = DISC_AND_UA_SIZE;
+	int tr_UA = write(porta, data, data_size);
+
+	return (tr_DISC == DISC_AND_UA_SIZE && tr_UA == DISC_AND_UA_SIZE) ? 0 : -1;
 }
 
 volatile int STOP = FALSE;
@@ -267,10 +288,8 @@ int main(int argc, char** argv)
 {
 	(void)signal(SIGALRM, answer_alarm);
 
-	int fd, c, res;
+	int fd;
 	struct termios oldtio, newtio;
-	char buf[255];
-	int i, sum = 0, speed = 0;
 
 	if ((argc < 2) ||
 		((strcmp("/dev/ttyS0", argv[1]) != 0) &&
@@ -278,7 +297,7 @@ int main(int argc, char** argv)
 		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
 		exit(1);
 	}
-	
+
 	//gets(buf);
 
 	/*
@@ -307,7 +326,7 @@ int main(int argc, char** argv)
 
   /*
 	VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-	leitura do(s) prÃ³ximo(s) caracter(es)
+	leitura do(s) proximo(s) caracter(es)
   */
 
 	tcflush(fd, TCIOFLUSH);
@@ -318,21 +337,18 @@ int main(int argc, char** argv)
 	}
 
 	printf("New termios structure set\n");
-	
+
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
 
 
-	int imageFd;
-	imageFd = open("pinguim.gif", O_RDONLY);
-	char a[10968];
-	int z;
-	for(z = 0; z < 10968; z++){
-		read(imageFd,&a[z], 1);
-	}
-	close(imageFd);
+	int dataFd = open("pinguim.gif", O_RDONLY);
+	unsigned char data[MAX_SIZE];
+	int i;
+	for (i = 0; i < MAX_SIZE && read(dataFd, &data[i], 1); i++)
+		llwrite(fd, &data[i], 1);
+	close(dataFd);
 
-	llwrite(fd, a, 10968);
 
 	//res = write(fd, buf, strlen(buf) + 1);
 	//printf("%d bytes written\n", res);
@@ -352,6 +368,6 @@ int main(int argc, char** argv)
 		exit(-1);
 	}
 
-	close(fd);
+	llclose(fd);
 	return 0;
 }
