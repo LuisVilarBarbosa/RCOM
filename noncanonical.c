@@ -35,7 +35,7 @@
 #define BCC1_RCV 6
 #define RCV_DATA 7
 #define BCC2_RCV 8
-#define TIME_OUT 3
+#define TIME_OUT 1
 #define ESC 0x7d
 #define MAX_SIZE 1048576	/* 1MB */
 
@@ -127,7 +127,7 @@ int llread(int fd, unsigned char * buffer)
 
 	//printf("Data layer reading 'information frame' from the serial conexion.\n");
 	int state = START, i = 0, parity = 0xff;
-	unsigned char ch, antCh;
+	unsigned char ch, antCh, auxAntChar;
 
 	// Supervision frame to be used by the alarm handler
 	data[0] = F;
@@ -179,9 +179,8 @@ int llread(int fd, unsigned char * buffer)
 						printf("A problem occurred reading on 'llread'.\n");
 					ch = ch ^ 0x20;
 				}
-				printf("recebeu: %02x\n", ch);
 				buffer[i] = ch;
-				printf("buffer[%d] = %02x;",i, ch);
+				printf("buffer[%d] = %02x;\n",i, ch);
 				parity = (parity ^ buffer[i]);
 				i++;
 			}
@@ -191,16 +190,42 @@ int llread(int fd, unsigned char * buffer)
 				state = STOP_SM;
 			}
 			else {
-				if (antCh == ESC) {
-					ch = antCh ^ 0x20;
+				if (antCh == ESC) { //tratar do byte anterior se for um esc
+					ch = ch ^ 0x20;
+					printf("o anterior e um escape");
+					buffer[i] = ch;
+					printf("bufferEspc3[%d] = %02x;\n", i, ch);
+					parity = (parity ^ buffer[i]);
+					i++;
+					state = RCV_DATA;
+					break;
+				}
+				else { // se o anterior se for data normal
+					auxAntChar = antCh;
+					buffer[i] = auxAntChar;
+					parity = (parity ^ buffer[i]);
+					printf("bufferEsp[%d] = %02x;\n", i, buffer[i]);
+					i++;
+				}
+				
+
+				if (ch == parity) {// trata deste byte (pode ser paridade ou data)
+					state = BCC2_RCV;
+					antCh = ch;
 				}
 				else {
-					ch = antCh;
+					if (ch == ESC) {
+						if (read(fd, &ch, 1) != 1)
+							printf("A problem occurred reading on 'llread'.\n");
+						ch = ch ^ 0x20;
+						printf("O Segundo lido e um ESC\n");
+					}
+					buffer[i] = ch;
+					printf("bufferEspc2[%d] = %02x;\n", i, ch);
+					parity = (parity ^ buffer[i]);
+					i++;
+					state = RCV_DATA;
 				}
-				buffer[i] = ch;
-				parity = (parity ^ buffer[i]);
-				i++;
-				state = BCC2_RCV;
 			}
 			break;
 		}
@@ -386,13 +411,45 @@ int main(int argc, char** argv)
 		printf("bytes passados: %d\n", i);
 		readBytes = llread(fd, fileData);
 		j = readBytes;
+
 		while(j > 0){
 			readData[i+j-1] = fileData[j-1];
-			printf("escreveu : %02x\n", readData[i+j-1]);
+			printf("escreveu em readData[%d]: %02x\n", i+j-1, readData[i+j-1]);
 			j--;
 		}
 		i += readBytes;
 	}
+
+
+/*//TESTE
+	unsigned char readData2[MAX_SIZE];
+
+
+	i = 0;
+	readBytes = 0;
+	j = 0;
+
+	while (i < 10968){
+		printf("bytes passados: %d\n", i);
+		readBytes = llread(fd, fileData);
+		j = readBytes;
+		printf("o j e: %d\n", j);
+
+		while(j > 0){
+			readData2[i+j-1] = fileData[j-1];
+			printf("escreveu em readData[%d]: %02x\n", i+j-1, readData[i+j-1]);
+			j--;
+		}
+		i += readBytes;
+	}
+	
+	int asda = 0;
+	for(asda = 0; asda < i; asda++){
+		if(readData2[asda] != readData[asda])
+			printf("erro em %d: %02x != %02x\n", asda,readData2[asda], readData[asda]);
+	}
+
+//fim de teste*/
 
 	write(dataFd, readData, 10968);
 	close(dataFd);
