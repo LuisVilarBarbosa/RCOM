@@ -130,7 +130,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 
 	int originalPos = pos;
 	while (originalPos == pos) {
-		printf("Data layer writing 'information frame' to the serial conexion.\n");
+		//printf("Data layer writing 'information frame' to the serial conexion.\n");
 		// Header
 		data[0] = F;
 		data[1] = A;
@@ -152,6 +152,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				data[data_size] = buffer[i];
 				data_size++;
 			}
+			printf("data sent: %02x\n", data[data_size-1]);
 		}
 		int parity = 0xff;
 		for (i = 0; i < length; i++) {
@@ -167,7 +168,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 
 		pos = (pos + 1) % 2;
 
-		printf("Data layer reading 'supervision frame' from the serial conexion.\n");
+		//printf("Data layer reading 'supervision frame' from the serial conexion.\n");
 		alarmOn();
 		unsigned char ch;
 		int state = START;
@@ -344,12 +345,27 @@ int main(int argc, char** argv)
 
 	int dataFd = open("pinguim.gif", O_RDONLY);
 	unsigned char fileData[MAX_SIZE];
-	int i;
+	int i = 0;
+	int size_read = 0;
 
-	for (i = 0; i < MAX_SIZE && read(dataFd, &fileData[i], 1); i++)
-		llwrite(fd, &fileData[i], 1);
+	while((size_read = read(dataFd, fileData, 9))){
+		llwrite(fd, fileData, size_read);
+		i += size_read;
+		printf("bytes enciados: %d\n", i);
+		/*if((i == 480) | (i == 481) | (i == 482) | (i == 483) | (i == 1249) | (i == 1250) | (i ==2017)){
+			sleep(18);
+		}*/
+	}
 	close(dataFd);
+	
+	/*//teste
+	dataFd = open("pinguim.gif", O_RDONLY);
 
+	for (i = 0; i < MAX_SIZE && (size_read = read(dataFd, &fileData[i], 1)); i++){
+		llwrite(fd, &fileData[i], size_read);
+	}
+	close(dataFd);
+	//fim de teste*/
 
 	//res = write(fd, buf, strlen(buf) + 1);
 	//printf("%d bytes written\n", res);
