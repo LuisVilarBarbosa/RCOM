@@ -41,6 +41,7 @@
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
 unsigned char data[MAX_SIZE];
+int stateRead = START, readNumB = 0, parityRead = 0xff;
 
 void alarmOn() {
 	alarm_on = TRUE;
@@ -57,9 +58,12 @@ void answer_alarm()
 	if (alarm_on == TRUE) {
 		alarm_calls++;
 		write(write_fd, data, data_size);
+		printf("enviou a flag REJ\n");
 		printf("Resend %d of the data.\n", alarm_calls);
-
-		if (alarm_calls < 3)	// to resend the data 3 times
+		stateRead = START;
+		readNumB = 0;
+		parityRead = 0xff;
+		if (alarm_calls < 10)	// to resend the data 3 times
 			alarm(TIME_OUT);
 		else
 			alarm_on = FALSE;
@@ -126,51 +130,56 @@ int llread(int fd, unsigned char * buffer)
 	write_fd = fd;
 
 	//printf("Data layer reading 'information frame' from the serial conexion.\n");
-	int state = START, i = 0, parity = 0xff;
+	stateRead = START;
+	readNumB = 0;
+	parityRead = 0xff;
 	unsigned char ch, antCh, auxAntChar;
 
 	// Supervision frame to be used by the alarm handler
-	data[0] = F;
+	/*data[0] = F;
 	data[1] = A;
 	data[2] = C_REJ(pos);
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
-	data_size = 5;
+	data_size = 5;*/
 
 	alarmOn();
-	while (state != STOP_SM) {
+	while (stateRead != STOP_SM) {
+		printf("Tenta\n");
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
-		switch (state) {
+		printf("Consegue\n");
+		switch (stateRead) {
 		case START:
 			if (ch == F)
-				state = FLAG_RCV;
-			// else state = START;
+				stateRead = FLAG_RCV;
+			// else stateRead = START;
 			break;
 		case FLAG_RCV:
 			if (ch == A)
-				state = A_RCV;
+				stateRead = A_RCV;
 			else if (ch == F)
-				state = FLAG_RCV;
-			else state = START;
+				stateRead = FLAG_RCV;
+			else stateRead = START;
 			break;
 		case A_RCV:
 			if (ch == C_SEND(pos))
-				state = C_RCV;
-			else if (ch == F)
-				state = FLAG_RCV;
-			else state = START;
+				stateRead = C_RCV;
+			//else if (ch == F)
+			//	stateRead = FLAG_RCV;
+			else{ stateRead = START; printf("Erro: não recebeu a flag que devia");
+			}
 			break;
 		case C_RCV:
 			if (ch == (A ^ C_SEND(pos)))	// BCC1
-				state = RCV_DATA;
+				stateRead = RCV_DATA;
 			else if (ch == F)
-				state = FLAG_RCV;
-			else state = START;
+				stateRead = FLAG_RCV;
+			else stateRead = START;
 			break;
 		case RCV_DATA:
-			if (ch == parity) {	// BCC2
-				state = BCC2_RCV;
+			if (ch == parityRead) {	// BCC2
+				stateRead = BCC2_RCV;
 				antCh = ch;
 			}
 			else {
@@ -179,38 +188,38 @@ int llread(int fd, unsigned char * buffer)
 						printf("A problem occurred reading on 'llread'.\n");
 					ch = ch ^ 0x20;
 				}
-				buffer[i] = ch;
-				printf("buffer[%d] = %02x;\n",i, ch);
-				parity = (parity ^ buffer[i]);
-				i++;
+				buffer[readNumB] = ch;
+				printf("buffer[%d] = %02x;\n",readNumB, ch);
+				parityRead = (parityRead ^ buffer[readNumB]);
+				readNumB++;
 			}
 			break;
 		case BCC2_RCV:
 			if (ch == F) {
-				state = STOP_SM;
+				stateRead = STOP_SM;
 			}
 			else {
 				if (antCh == ESC) { //tratar do byte anterior se for um esc
 					ch = ch ^ 0x20;
 					printf("o anterior e um escape");
-					buffer[i] = ch;
-					printf("bufferEspc3[%d] = %02x;\n", i, ch);
-					parity = (parity ^ buffer[i]);
-					i++;
-					state = RCV_DATA;
+					buffer[readNumB] = ch;
+					printf("bufferEspc3[%d] = %02x;\n", readNumB, ch);
+					parityRead = (parityRead ^ buffer[readNumB]);
+					readNumB++;
+					stateRead = RCV_DATA;
 					break;
 				}
 				else { // se o anterior se for data normal
 					auxAntChar = antCh;
-					buffer[i] = auxAntChar;
-					parity = (parity ^ buffer[i]);
-					printf("bufferEsp[%d] = %02x;\n", i, buffer[i]);
-					i++;
+					buffer[readNumB] = auxAntChar;
+					parityRead = (parityRead ^ buffer[readNumB]);
+					printf("bufferEsp[%d] = %02x;\n", readNumB, buffer[readNumB]);
+					readNumB++;
 				}
 				
 
-				if (ch == parity) {// trata deste byte (pode ser paridade ou data)
-					state = BCC2_RCV;
+				if (ch == parityRead) {// trata deste byte (pode ser paridade ou data)
+					stateRead = BCC2_RCV;
 					antCh = ch;
 				}
 				else {
@@ -220,11 +229,11 @@ int llread(int fd, unsigned char * buffer)
 						ch = ch ^ 0x20;
 						printf("O Segundo lido e um ESC\n");
 					}
-					buffer[i] = ch;
-					printf("bufferEspc2[%d] = %02x;\n", i, ch);
-					parity = (parity ^ buffer[i]);
-					i++;
-					state = RCV_DATA;
+					buffer[readNumB] = ch;
+					printf("bufferEspc2[%d] = %02x;\n", readNumB, ch);
+					parityRead = (parityRead ^ buffer[readNumB]);
+					readNumB++;
+					stateRead = RCV_DATA;
 				}
 			}
 			break;
@@ -242,7 +251,7 @@ int llread(int fd, unsigned char * buffer)
 	data[4] = F;
 	data_size = 5;
 	write(write_fd, data, data_size);
-	return i;
+	return readNumB;
 }
 
 int llclose(int porta) {
