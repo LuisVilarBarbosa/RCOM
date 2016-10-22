@@ -58,7 +58,6 @@ void answer_alarm()
 	if (alarm_on == TRUE) {
 		alarm_calls++;
 		write(write_fd, data, data_size);
-		printf("enviou a flag REJ\n");
 		printf("Resend %d of the data.\n", alarm_calls);
 		stateRead = START;
 		readNumB = 0;
@@ -145,10 +144,8 @@ int llread(int fd, unsigned char * buffer)
 
 	alarmOn();
 	while (stateRead != STOP_SM) {
-		printf("Tenta\n");
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
-		printf("Consegue\n");
 		switch (stateRead) {
 		case START:
 			if (ch == F)
@@ -167,7 +164,8 @@ int llread(int fd, unsigned char * buffer)
 				stateRead = C_RCV;
 			//else if (ch == F)
 			//	stateRead = FLAG_RCV;
-			else{ stateRead = START; printf("Erro: não recebeu a flag que devia");
+			else{ stateRead = START; 
+				printf("Erro: não recebeu a flag que devia");
 			}
 			break;
 		case C_RCV:
@@ -189,7 +187,6 @@ int llread(int fd, unsigned char * buffer)
 					ch = ch ^ 0x20;
 				}
 				buffer[readNumB] = ch;
-				printf("buffer[%d] = %02x;\n",readNumB, ch);
 				parityRead = (parityRead ^ buffer[readNumB]);
 				readNumB++;
 			}
@@ -201,9 +198,7 @@ int llread(int fd, unsigned char * buffer)
 			else {
 				if (antCh == ESC) { //tratar do byte anterior se for um esc
 					ch = ch ^ 0x20;
-					printf("o anterior e um escape");
 					buffer[readNumB] = ch;
-					printf("bufferEspc3[%d] = %02x;\n", readNumB, ch);
 					parityRead = (parityRead ^ buffer[readNumB]);
 					readNumB++;
 					stateRead = RCV_DATA;
@@ -213,7 +208,6 @@ int llread(int fd, unsigned char * buffer)
 					auxAntChar = antCh;
 					buffer[readNumB] = auxAntChar;
 					parityRead = (parityRead ^ buffer[readNumB]);
-					printf("bufferEsp[%d] = %02x;\n", readNumB, buffer[readNumB]);
 					readNumB++;
 				}
 				
@@ -227,10 +221,8 @@ int llread(int fd, unsigned char * buffer)
 						if (read(fd, &ch, 1) != 1)
 							printf("A problem occurred reading on 'llread'.\n");
 						ch = ch ^ 0x20;
-						printf("O Segundo lido e um ESC\n");
 					}
 					buffer[readNumB] = ch;
-					printf("bufferEspc2[%d] = %02x;\n", readNumB, ch);
 					parityRead = (parityRead ^ buffer[readNumB]);
 					readNumB++;
 					stateRead = RCV_DATA;
@@ -423,7 +415,6 @@ int main(int argc, char** argv)
 
 		while(j > 0){
 			readData[i+j-1] = fileData[j-1];
-			printf("escreveu em readData[%d]: %02x\n", i+j-1, readData[i+j-1]);
 			j--;
 		}
 		i += readBytes;
