@@ -34,7 +34,7 @@
 #define BCC_OK 4
 #define STOP_SM 5
 #define BCC1_RCV 6
-#define TIME_OUT 3
+#define TIME_OUT 2
 #define ESC 0x7d
 #define MAX_SIZE 1048576	/* 1MB */
 
@@ -59,7 +59,7 @@ void answer_alarm()
 		write(write_fd, data, data_size);
 		printf("Resend %d of the data.\n", alarm_calls);
 		stateWrite = START;
-		if (alarm_calls < 3)	// to resend the data 3 times
+		if (alarm_calls < 5)	// to resend the data 3 times
 			alarm(TIME_OUT);
 		else
 			alarm_on = FALSE;
@@ -128,8 +128,6 @@ volatile int pos = 0;	// can be 0 or 1, it is used by llwrite
 int llwrite(int fd, unsigned char *buffer, int length)
 {
 	write_fd = fd;
-
-	int originalPos = pos;
 	int repete = TRUE;
 	while (repete == TRUE) {
 		//printf("Data layer writing 'information frame' to the serial conexion.\n");
@@ -154,7 +152,6 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				data[data_size] = buffer[i];
 				data_size++;
 			}
-			printf("data sent: %02x\n", data[data_size-1]);
 		}
 		int parity = 0xff;
 		for (i = 0; i < length; i++) {
@@ -175,10 +172,8 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		unsigned char ch;
 		stateWrite = START;
 		while (stateWrite != STOP_SM) {
-			printf("tenta\n");
 			if (read(fd, &ch, 1) != 1)
 				printf("A problem occurred reading a byte on 'llwrite'.\n");
-			printf("recebeu\n");
 			switch (stateWrite) {
 			case START:
 				if (ch == F)
@@ -188,48 +183,28 @@ int llwrite(int fd, unsigned char *buffer, int length)
 			case FLAG_RCV:
 				if (ch == A)
 					stateWrite = A_RCV;
-				//else if (ch == F){
-				//	stateWrite = FLAG_RCV;printf("vai aqui99\n");}
-				else{ stateWrite = START; printf("vai aqui88\n");}
+				else stateWrite = START;
 				break;
 			case A_RCV:
-				if (ch == C_REJ((pos + 1) % 2)) {
-					printf("Recebeu uma Rej da falg contraria\n");
-				}
-				if (ch == C_REJ(pos)) {
-					printf("Recebeu uma Rej da falg dseta flag\n");
-				}
-
-				if (ch == C_RR((pos + 1) % 2)) {
-					printf("Recebeu um RR da falg contraria\n");
-				}
-				if (ch == C_RR(pos)) {
-					printf("Recebeu um RR da falg dseta flag\n");
-				}
-				
 				if (ch == C_RR((pos + 1) % 2)){
 					stateWrite = C_RCV;
 					repete = FALSE;
-					printf("vai aquiytytutuyty\n");
 				}
 				else if (ch == C_REJ(pos) || ch == C_REJ((pos + 1) % 2)) {
 					stateWrite = C_RCV;
 					//pos = (pos + 1) % 2;	//to receive all the data again
 					repete = TRUE;
-					printf("vai aqui00000000\n");
 				}
 				//else if (ch == F)
 				//	stateWrite = FLAG_RCV;
-				else {stateWrite = START; printf("vai aqui3\n");}
+				else stateWrite = START;
 				break;
 			case C_RCV:
 				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))){
-					printf("chega aqui1\n");
 					stateWrite = BCC1_RCV;
 				}
 				else {
 					stateWrite = START;	
-					printf("chega aqui3\n");
 				}
 				break;
 			case BCC1_RCV:
@@ -377,7 +352,7 @@ int main(int argc, char** argv)
 	while((size_read = read(dataFd, fileData, 6))){
 		llwrite(fd, fileData, size_read);
 		i += size_read;
-		printf("bytes enciados: %d\n", i);
+		printf("bytes enviados: %d\n", i);
 		/*if((i == 480) | (i == 481) | (i == 482) | (i == 483) | (i == 1249) | (i == 1250) | (i ==2017)){
 			sleep(18);
 		}*/
