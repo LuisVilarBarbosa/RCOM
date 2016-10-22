@@ -125,7 +125,7 @@ int llread(int fd, unsigned char * buffer)
 {
 	write_fd = fd;
 
-	printf("Data layer reading 'information frame' from the serial conexion.\n");
+	//printf("Data layer reading 'information frame' from the serial conexion.\n");
 	int state = START, i = 0, parity = 0xff;
 	unsigned char ch, antCh;
 
@@ -179,7 +179,9 @@ int llread(int fd, unsigned char * buffer)
 						printf("A problem occurred reading on 'llread'.\n");
 					ch = ch ^ 0x20;
 				}
+				printf("recebeu: %02x\n", ch);
 				buffer[i] = ch;
+				printf("buffer[%d] = %02x;",i, ch);
 				parity = (parity ^ buffer[i]);
 				i++;
 			}
@@ -187,7 +189,6 @@ int llread(int fd, unsigned char * buffer)
 		case BCC2_RCV:
 			if (ch == F) {
 				state = STOP_SM;
-				i--;	// delete last read char
 			}
 			else {
 				if (antCh == ESC) {
@@ -216,11 +217,11 @@ int llread(int fd, unsigned char * buffer)
 	data[4] = F;
 	data_size = 5;
 	write(write_fd, data, data_size);
-
 	return i;
 }
 
 int llclose(int porta) {
+	printf("chegou ao llclose\n");
 	int write_fd = porta;
 
 	unsigned char DISC_char;
@@ -375,12 +376,25 @@ int main(int argc, char** argv)
 
 	int dataFd = open("pinguim.gif", O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666);
 	unsigned char fileData[MAX_SIZE];
+	unsigned char readData[MAX_SIZE];
 
 	int i = 0;
-	while (i < MAX_SIZE)
-		i += llread(fd, &fileData[i]);
+	int readBytes = 0;
+	int j = 0;
 
-	write(dataFd, fileData, i);
+	while (i < 10968){
+		printf("bytes passados: %d\n", i);
+		readBytes = llread(fd, fileData);
+		j = readBytes;
+		while(j > 0){
+			readData[i+j-1] = fileData[j-1];
+			printf("escreveu : %02x\n", readData[i+j-1]);
+			j--;
+		}
+		i += readBytes;
+	}
+
+	write(dataFd, readData, 10968);
 	close(dataFd);
 
 	//printf("%s\n", buf);
