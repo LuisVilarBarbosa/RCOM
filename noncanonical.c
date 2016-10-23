@@ -168,7 +168,7 @@ int llread(int fd, unsigned char * buffer)
 			//else if (ch == F)
 			//	stateRead = FLAG_RCV;
 			else{ stateRead = START; 
-				printf("Erro: não recebeu a flag que devia");
+				printf("Erro: Recived wrong flag.\n");
 			}
 			break;
 		case C_RCV:
@@ -250,9 +250,8 @@ int llread(int fd, unsigned char * buffer)
 }
 
 int llclose(int porta) {
-	printf("chegou ao llclose\n");
+	printf("A terminar ligacao\n");
 	int write_fd = porta;
-	printf("Vai aqui!");
 	unsigned char DISC_char;
 	int state = START;
 	while (state != STOP_SM) {
@@ -361,7 +360,7 @@ int reciveFromSerial(int fd){
 	int sizeOfFile = 0;
 	char nameOfFile[250];
 	if(appControlPacket[0] != C_START){
-		printf("Erro ao receber o Controlo dos pacotes da aplicacao\n");
+		printf("Erro reciving the Control packet of the aplication.\n");
 		return -1;
 	}
 	
@@ -379,7 +378,6 @@ int reciveFromSerial(int fd){
 			for(k = 1; k <= numLength; k++){
 				sizeOfFile += ((appControlPacket[initialN + k]) << ((k-1)*8));
 				i++;
-				printf("iteracao: %d - size - %d\n", k, sizeOfFile);
 			}
 			i++;
 			break;
@@ -394,7 +392,7 @@ int reciveFromSerial(int fd){
 			i++;
 			break;
 		default:
-			printf("ERRO ao receber os packets de controlo\n");
+			printf("Erro reciving os the control fields.\n");
 			break;
 		}
 	}
@@ -406,19 +404,32 @@ int reciveFromSerial(int fd){
 	unsigned char readData[MAX_SIZE];
 
 	i = 0;
-	int readBytes = 0;
-	int j = 0;
+	int j;
+	unsigned char sequenceNum = 0;
+	unsigned long nunOcte;
 
 	while (i < sizeOfFile){
+		llread(fd, fileData);
 		
-		readBytes = llread(fd, fileData);
-		j = readBytes;
-
-		while(j > 0){
-			readData[i+j-1] = fileData[j-1];
-			j--;
+		if(fileData[0] != 1){
+			printf("Erro reciving data packets: control field wrong.\n");
+			return -1;
 		}
-		i += readBytes;
+			
+		if(fileData[1] != sequenceNum){
+			printf("Erro reciving data packets: sequence number wrong.\n");
+			return -1;
+		}
+		
+		nunOcte = fileData[2]*256 + fileData[3];
+		j = 0;
+		while(j < nunOcte){
+			readData[i+j] = fileData[j+4];
+			j++;
+		}
+		
+		i += nunOcte;
+		sequenceNum++;
 		printf("bytes passados: %d\n", i);
 	}
 	
@@ -534,6 +545,6 @@ int main(int argc, char** argv)
 
 	//write(fd, buf, strlen(buf) + 1);
 	tcsetattr(fd, TCSANOW, &oldtio);
-	//llclose(fd);
+	llclose(fd);
 	return 0;
 }
