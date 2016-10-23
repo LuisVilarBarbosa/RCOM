@@ -26,6 +26,7 @@
 #define C_SEND(S) (S << 6)
 #define C_RR(R) ((R << 7) | 0x05)
 #define C_REJ(R) ((R << 7) | 0x01)
+#define C_START 2
 #define START 0
 #define FLAG_RCV 1
 #define A_RCV 2
@@ -38,6 +39,8 @@
 #define TIME_OUT 1
 #define ESC 0x7d
 #define MAX_SIZE 1048576	/* 1MB */
+#define FILE_SIZE_INDICATOR 0
+#define FILE_NAME_INDICATOR 1
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
 unsigned char data[MAX_SIZE];
@@ -249,7 +252,7 @@ int llread(int fd, unsigned char * buffer)
 int llclose(int porta) {
 	printf("chegou ao llclose\n");
 	int write_fd = porta;
-
+	printf("Vai aqui!");
 	unsigned char DISC_char;
 	int state = START;
 	while (state != STOP_SM) {
@@ -345,6 +348,97 @@ int llclose(int porta) {
 
 volatile int STOP = FALSE;
 
+
+
+
+
+
+
+int reciveFromSerial(int fd){
+	
+	unsigned char appControlPacket[MAX_SIZE];
+	int sizeAppCtlPkt = llread(fd, appControlPacket);
+	int sizeOfFile = 0;
+	char nameOfFile[250];
+	if(appControlPacket[0] != C_START){
+		printf("Erro ao receber o Controlo dos pacotes da aplicacao\n");
+		return -1;
+	}
+	
+	int i = 1;
+	int k;
+	int numLength;
+	int initialN;
+	while(i < sizeAppCtlPkt){
+	switch (appControlPacket[i]) {
+		case FILE_SIZE_INDICATOR:
+			i++;
+			sizeOfFile = 0;
+			numLength = appControlPacket[i];
+			initialN = i;
+			for(k = 1; k <= numLength; k++){
+				sizeOfFile += ((appControlPacket[initialN + k]) << ((k-1)*8));
+				i++;
+				printf("iteracao: %d - size - %d\n", k, sizeOfFile);
+			}
+			i++;
+			break;
+		case FILE_NAME_INDICATOR:
+			i++;
+			numLength = appControlPacket[i];
+			initialN = i;
+			for(k = 1; k <= numLength; k++){
+				nameOfFile[k-1] += appControlPacket[initialN + k];
+				i++;
+			}
+			i++;
+			break;
+		default:
+			printf("ERRO ao receber os packets de controlo\n");
+			break;
+		}
+	}
+	
+	
+	
+	int dataFd = open(nameOfFile, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666);
+	unsigned char fileData[MAX_SIZE];
+	unsigned char readData[MAX_SIZE];
+
+	i = 0;
+	int readBytes = 0;
+	int j = 0;
+
+	while (i < sizeOfFile){
+		
+		readBytes = llread(fd, fileData);
+		j = readBytes;
+
+		while(j > 0){
+			readData[i+j-1] = fileData[j-1];
+			j--;
+		}
+		i += readBytes;
+		printf("bytes passados: %d\n", i);
+	}
+	
+	write(dataFd, readData, sizeOfFile);
+	close(dataFd);
+	
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
 int main(int argc, char** argv)
 {
 	(void)signal(SIGALRM, answer_alarm);
@@ -400,25 +494,8 @@ int main(int argc, char** argv)
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
 
-	int dataFd = open("pinguim.gif", O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666);
-	unsigned char fileData[MAX_SIZE];
-	unsigned char readData[MAX_SIZE];
+	reciveFromSerial(fd);
 
-	int i = 0;
-	int readBytes = 0;
-	int j = 0;
-
-	while (i < 10968){
-		printf("bytes passados: %d\n", i);
-		readBytes = llread(fd, fileData);
-		j = readBytes;
-
-		while(j > 0){
-			readData[i+j-1] = fileData[j-1];
-			j--;
-		}
-		i += readBytes;
-	}
 
 
 /*//TESTE
@@ -451,13 +528,12 @@ int main(int argc, char** argv)
 
 //fim de teste*/
 
-	write(dataFd, readData, 10968);
-	close(dataFd);
+
 
 	//printf("%s\n", buf);
 
 	//write(fd, buf, strlen(buf) + 1);
 	tcsetattr(fd, TCSANOW, &oldtio);
-	llclose(fd);
+	//llclose(fd);
 	return 0;
 }
