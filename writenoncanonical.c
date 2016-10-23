@@ -186,7 +186,13 @@ int llwrite(int fd, unsigned char *buffer, int length)
 			case FLAG_RCV:
 				if (ch == A)
 					stateWrite = A_RCV;
-				else stateWrite = START;
+				else{
+					stateWrite = STOP_SM;
+					repete = TRUE;
+					tcflush(fd, TCIOFLUSH);
+					break;
+
+					}
 				break;
 			case A_RCV:
 				if (ch == C_RR((pos + 1) % 2)){
@@ -194,32 +200,28 @@ int llwrite(int fd, unsigned char *buffer, int length)
 					repete = FALSE;
 				}
 				else if (ch == C_REJ(pos) || ch == C_REJ((pos + 1) % 2)) {
-					stateWrite = C_RCV;
+					stateWrite = STOP_SM;
 					//pos = (pos + 1) % 2;	//to receive all the data again
-					printf("ERROdddfsdfsdf\n");
 					repete = TRUE;
+					tcflush(fd, TCIOFLUSH);
+					break;
 				}
-				else {
-					repete = TRUE;
-					stateWrite = START;
-				}
+				//else if (ch == F)
+				//	stateWrite = FLAG_RCV;
+				else stateWrite = START;
 				break;
 			case C_RCV:
 				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))){
 					stateWrite = BCC1_RCV;
 				}
 				else {
-					repete = TRUE;
 					stateWrite = START;	
 				}
 				break;
 			case BCC1_RCV:
 				if (ch == F)
 					stateWrite = STOP_SM;
-				else{
-					stateWrite = START;
-					repete = TRUE;
-				}
+				else stateWrite = START;
 				break;
 			}
 		}
@@ -344,7 +346,7 @@ int writeToSerial(int fd, char fileName[]){
 	unsigned long j;
 	unsigned long size_read = 0;
 	unsigned char sequenceNum = 0;
-	while((size_read = read(dataFd, fileData, 512))) {
+	while((size_read = read(dataFd, fileData, 10))) {
 		fileToSend[0] = 1;
 		fileToSend[1] = sequenceNum;
 		fileToSend[2] = (unsigned char) (size_read/256);
