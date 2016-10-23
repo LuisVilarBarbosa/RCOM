@@ -36,7 +36,7 @@
 #define BCC1_RCV 6
 #define RCV_DATA 7
 #define BCC2_RCV 8
-#define TIME_OUT 1
+#define TIME_OUT 3
 #define ESC 0x7d
 #define MAX_SIZE 1048576	/* 1MB */
 #define FILE_SIZE_INDICATOR 0
@@ -65,11 +65,25 @@ void answer_alarm()
 		stateRead = START;
 		readNumB = 0;
 		parityRead = 0xff;
-		if (alarm_calls < 10)	// to resend the data 3 times
+		if (alarm_calls < 3)	// to resend the data 3 times
 			alarm(TIME_OUT);
 		else
 			alarm_on = FALSE;
 	}
+}
+
+void sendREJ(int fd, int position){
+	// Supervision frame in case of failure
+	tcflush(fd, TCIOFLUSH);
+	unsigned char dataREJ[5];
+	//printf("sendREJ chamada\n");
+	dataREJ[0] = F;
+	dataREJ[1] = A;
+	dataREJ[2] = C_REJ(position);
+	dataREJ[3] = dataREJ[1] ^ dataREJ[2];
+	dataREJ[4] = F;
+	int dataREJ_size = 5;
+	write(fd, dataREJ, dataREJ_size);
 }
 
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
@@ -158,9 +172,12 @@ int llread(int fd, unsigned char * buffer)
 		case FLAG_RCV:
 			if (ch == A)
 				stateRead = A_RCV;
-			else if (ch == F)
-				stateRead = FLAG_RCV;
-			else stateRead = START;
+			else{ 
+				sendREJ(fd, pos);
+				
+			//	printf("chegou mal ao pos.1\n");			
+				stateRead = START;
+			}
 			break;
 		case A_RCV:
 			if (ch == C_SEND(pos))
