@@ -35,7 +35,7 @@
 #define BCC_OK 4
 #define STOP_SM 5
 #define BCC1_RCV 6
-#define TIME_OUT 2
+#define TIME_OUT 3
 #define ESC 0x7d
 #define MAX_SIZE 1048576	/* 1MB */
 #define FILE_SIZE_INDICATOR 0
@@ -62,7 +62,7 @@ void answer_alarm()
 		write(write_fd, data, data_size);
 		printf("Resend %d of the data.\n", alarm_calls);
 		stateWrite = START;
-		if (alarm_calls < 5)	// to resend the data 3 times
+		if (alarm_calls < 3)	// to resend the data 3 times
 			alarm(TIME_OUT);
 		else
 			alarm_on = FALSE;
@@ -196,24 +196,30 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				else if (ch == C_REJ(pos) || ch == C_REJ((pos + 1) % 2)) {
 					stateWrite = C_RCV;
 					//pos = (pos + 1) % 2;	//to receive all the data again
+					printf("ERROdddfsdfsdf\n");
 					repete = TRUE;
 				}
-				//else if (ch == F)
-				//	stateWrite = FLAG_RCV;
-				else stateWrite = START;
+				else {
+					repete = TRUE;
+					stateWrite = START;
+				}
 				break;
 			case C_RCV:
 				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))){
 					stateWrite = BCC1_RCV;
 				}
 				else {
+					repete = TRUE;
 					stateWrite = START;	
 				}
 				break;
 			case BCC1_RCV:
 				if (ch == F)
 					stateWrite = STOP_SM;
-				else stateWrite = START;
+				else{
+					stateWrite = START;
+					repete = TRUE;
+				}
 				break;
 			}
 		}
@@ -333,18 +339,31 @@ int writeToSerial(int fd, char fileName[]){
 	//sending packets
 	int dataFd = open(fileName, O_RDONLY);
 	unsigned char fileData[MAX_SIZE];
+	unsigned char fileToSend[MAX_SIZE];
 	i = 0;
-	int size_read = 0;
-
-	while((size_read = read(dataFd, fileData, 6))){
-		llwrite(fd, fileData, size_read);
+	unsigned long j;
+	unsigned long size_read = 0;
+	unsigned char sequenceNum = 0;
+	while((size_read = read(dataFd, fileData, 512))) {
+		fileToSend[0] = 1;
+		fileToSend[1] = sequenceNum;
+		fileToSend[2] = (unsigned char) (size_read/256);
+		fileToSend[3] = (unsigned char) (size_read % 256);
+		for(j=0; j < size_read; j++)
+			fileToSend[j+4] = fileData[j];
+			
+		llwrite(fd, fileToSend, size_read+4);
 		i += size_read;
+		sequenceNum++;
 		printf("bytes enviados: %d\n", i);
 	}
 	close(dataFd);
 	
 	return 0;
 }
+
+
+
 
 int main(int argc, char** argv)
 {
@@ -434,6 +453,6 @@ int main(int argc, char** argv)
 		exit(-1);
 	}
 
-	//llclose(fd);
+	llclose(fd);
 	return 0;
 }
