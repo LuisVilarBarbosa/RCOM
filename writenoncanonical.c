@@ -27,6 +27,7 @@
 #define C_SEND(S) (S << 6)
 #define C_RR(R) ((R << 7) | 0x05)
 #define C_REJ(R) ((R << 7) | 0x01)
+#define C_START 2
 #define START 0
 #define FLAG_RCV 1
 #define A_RCV 2
@@ -37,6 +38,8 @@
 #define TIME_OUT 2
 #define ESC 0x7d
 #define MAX_SIZE 1048576	/* 1MB */
+#define FILE_SIZE_INDICATOR 0
+#define FILE_NAME_INDICATOR 1
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
 int stateWrite = START;
@@ -286,6 +289,63 @@ int llclose(int porta) {
 
 volatile int STOP = FALSE;
 
+
+
+
+
+
+int writeToSerial(int fd, char fileName[]){
+
+	//	find the size of the file
+	unsigned long fileLegth = 10968;
+	unsigned char appPacket[MAX_SIZE];
+	int appPacketSize = 0;
+	unsigned char * sizeInPackets = (unsigned char*)&fileLegth;
+	
+	// start packet 
+	appPacket[0] = C_START;		//2
+	appPacket[1] = FILE_SIZE_INDICATOR;	//0
+	appPacket[2] = sizeof(unsigned long); // length é guardada num ulong
+	appPacketSize = 3;
+	
+	int i;
+	for(i = 0; i < sizeof(unsigned long); i++){
+		appPacket[appPacketSize] = sizeInPackets[i];
+		appPacketSize++;
+	}
+	
+	
+	appPacket[appPacketSize] = FILE_NAME_INDICATOR;	//1
+	appPacketSize++;
+	appPacket[appPacketSize] = strlen(fileName);
+	appPacketSize++;
+	for (i=0 ; i < strlen(fileName); i++){
+		appPacket[appPacketSize] = (unsigned char) fileName[i];
+		appPacketSize++;
+	}
+	
+	llwrite(fd, appPacket, appPacketSize);
+	printf("o primeiro e: %d\n",appPacket[0]);
+	printf("enviou %d packets\n", appPacketSize);
+	
+	
+	
+	//sending packets
+	int dataFd = open(fileName, O_RDONLY);
+	unsigned char fileData[MAX_SIZE];
+	i = 0;
+	int size_read = 0;
+
+	while((size_read = read(dataFd, fileData, 6))){
+		llwrite(fd, fileData, size_read);
+		i += size_read;
+		printf("bytes enviados: %d\n", i);
+	}
+	close(dataFd);
+	
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	(void)signal(SIGALRM, answer_alarm);
@@ -339,25 +399,13 @@ int main(int argc, char** argv)
 	}
 
 	printf("New termios structure set\n");
-
+	
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
 
 
-	int dataFd = open("pinguim.gif", O_RDONLY);
-	unsigned char fileData[MAX_SIZE];
-	int i = 0;
-	int size_read = 0;
-
-	while((size_read = read(dataFd, fileData, 6))){
-		llwrite(fd, fileData, size_read);
-		i += size_read;
-		printf("bytes enviados: %d\n", i);
-		/*if((i == 480) | (i == 481) | (i == 482) | (i == 483) | (i == 1249) | (i == 1250) | (i ==2017)){
-			sleep(18);
-		}*/
-	}
-	close(dataFd);
+	writeToSerial(fd, "pinguim.gif");
+	
 	
 	/*//teste
 	dataFd = open("pinguim.gif", O_RDONLY);
@@ -386,6 +434,6 @@ int main(int argc, char** argv)
 		exit(-1);
 	}
 
-	llclose(fd);
+	//llclose(fd);
 	return 0;
 }
