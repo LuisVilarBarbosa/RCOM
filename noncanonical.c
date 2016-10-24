@@ -73,11 +73,10 @@ void answer_alarm()
 	}
 }
 
-void sendREJ(int fd, int position){
+void sendREJ(int fd, int position) {
 	// Supervision frame in case of failure
 	tcflush(fd, TCIOFLUSH);
 	unsigned char dataREJ[5];
-	//printf("sendREJ chamada\n");
 	dataREJ[0] = F;
 	dataREJ[1] = A;
 	dataREJ[2] = C_REJ(position);
@@ -151,14 +150,15 @@ int llread(int fd, unsigned char * buffer)
 	readNumB = 0;
 	parityRead = 0xff;
 	unsigned char ch, antCh, auxAntChar;
-	
+
 	alarmOn();
 	while (stateRead != STOP_SM) {
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
-	       
-		if((rand() % 10000) == 1){	// generate random error
-		  ch = ch ^ 0xb5;printf("Gerou erro.\n");}
+
+		if ((rand() % 10000) == 1) {	// generate random error
+			ch = ch ^ 0xb5; printf("Gerou erro.\n");
+		}
 		switch (stateRead) {
 		case START:
 			if (ch == F)
@@ -168,10 +168,10 @@ int llread(int fd, unsigned char * buffer)
 		case FLAG_RCV:
 			if (ch == A)
 				stateRead = A_RCV;
-			else{ 
+			else {
 				sendREJ(fd, pos);
-				
-			//	printf("chegou mal ao pos.1\n");			
+
+				//	printf("chegou mal ao pos.1\n");			
 				stateRead = START;
 			}
 			break;
@@ -180,7 +180,8 @@ int llread(int fd, unsigned char * buffer)
 				stateRead = C_RCV;
 			//else if (ch == F)
 			//	stateRead = FLAG_RCV;
-			else{ stateRead = START;
+			else {
+				stateRead = START;
 			}
 			break;
 		case C_RCV:
@@ -225,7 +226,7 @@ int llread(int fd, unsigned char * buffer)
 					parityRead = (parityRead ^ buffer[readNumB]);
 					readNumB++;
 				}
-				
+
 
 				if (ch == parityRead) {// trata deste byte (pode ser paridade ou data)
 					stateRead = BCC2_RCV;
@@ -357,36 +358,33 @@ int llclose(int porta) {
 	return (tr_DISC == DISC_AND_UA_SIZE) ? 0 : -1;
 }
 
+int receiveFromSerial(int fd) {
 
-int receiveFromSerial(int fd){
+	if (llopen(fd) == -1)
+		printf("Error occurred executing 'llopen'.\n");
 
-  
-
-  	if (llopen(fd) == -1)
-	  printf("Error occurred executing 'llopen'.\n");
-	
 	unsigned char appControlPacket[MAX_SIZE];
 	int sizeAppCtlPkt = llread(fd, appControlPacket);
 	int sizeOfFile = 0;
 	char nameOfFile[250];
-	if(appControlPacket[0] != C_START){
+	if (appControlPacket[0] != C_START) {
 		printf("Erro reciving the Control packet of the aplication.\n");
 		return -1;
 	}
-	
+
 	int i = 1;
 	int k;
 	int numLength;
 	int initialN;
-	while(i < sizeAppCtlPkt){
-	switch (appControlPacket[i]) {
+	while (i < sizeAppCtlPkt) {
+		switch (appControlPacket[i]) {
 		case FILE_SIZE_INDICATOR:
 			i++;
 			sizeOfFile = 0;
 			numLength = appControlPacket[i];
 			initialN = i;
-			for(k = 1; k <= numLength; k++){
-				sizeOfFile += ((appControlPacket[initialN + k]) << ((k-1)*8));
+			for (k = 1; k <= numLength; k++) {
+				sizeOfFile += ((appControlPacket[initialN + k]) << ((k - 1) * 8));
 				i++;
 			}
 			i++;
@@ -395,8 +393,8 @@ int receiveFromSerial(int fd){
 			i++;
 			numLength = appControlPacket[i];
 			initialN = i;
-			for(k = 1; k <= numLength; k++){
-				nameOfFile[k-1] += appControlPacket[initialN + k];
+			for (k = 1; k <= numLength; k++) {
+				nameOfFile[k - 1] += appControlPacket[initialN + k];
 				i++;
 			}
 			i++;
@@ -408,11 +406,11 @@ int receiveFromSerial(int fd){
 	}
 
 	int dataFd = open(nameOfFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-  if(dataFd == -1){
-    printf("Unable to create data file.\n");
-    llclose(fd);
-    return -1;
-  }
+	if (dataFd == -1) {
+		printf("Unable to create data file.\n");
+		llclose(fd);
+		return -1;
+	}
 
 	unsigned char fileData[MAX_SIZE];
 	unsigned char readData[MAX_SIZE];
@@ -422,48 +420,37 @@ int receiveFromSerial(int fd){
 	unsigned char sequenceNum = 0;
 	unsigned long nunOcte;
 
-	while (i < sizeOfFile){
+	while (i < sizeOfFile) {
 		llread(fd, fileData);
-		
-		if(fileData[0] != 1){
+
+		if (fileData[0] != 1) {
 			printf("Erro reciving data packets: control field wrong.\n");
 			return -1;
 		}
-			
-		if(fileData[1] != sequenceNum){
+
+		if (fileData[1] != sequenceNum) {
 			printf("Erro reciving data packets: sequence number wrong.\n");
 			return -1;
 		}
-		
-		nunOcte = fileData[2]*256 + fileData[3];
+
+		nunOcte = fileData[2] * 256 + fileData[3];
 		j = 0;
-		while(j < nunOcte){
-			readData[i+j] = fileData[j+4];
+		while (j < nunOcte) {
+			readData[i + j] = fileData[j + 4];
 			j++;
 		}
-		
+
 		i += nunOcte;
 		sequenceNum++;
 		printf("bytes recived: %d\n", i);
 	}
-	
+
 	write(dataFd, readData, sizeOfFile);
 	close(dataFd);
 	llclose(fd);
-	
+
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
 
 int main(int argc, char** argv)
 {
@@ -521,43 +508,6 @@ int main(int argc, char** argv)
 
 	receiveFromSerial(fd);
 
-
-
-/*//TESTE
-	unsigned char readData2[MAX_SIZE];
-
-
-	i = 0;
-	readBytes = 0;
-	j = 0;
-
-	while (i < 10968){
-		printf("bytes passados: %d\n", i);
-		readBytes = llread(fd, fileData);
-		j = readBytes;
-		printf("o j e: %d\n", j);
-
-		while(j > 0){
-			readData2[i+j-1] = fileData[j-1];
-			printf("escreveu em readData[%d]: %02x\n", i+j-1, readData[i+j-1]);
-			j--;
-		}
-		i += readBytes;
-	}
-	
-	int asda = 0;
-	for(asda = 0; asda < i; asda++){
-		if(readData2[asda] != readData[asda])
-			printf("erro em %d: %02x != %02x\n", asda,readData2[asda], readData[asda]);
-	}
-
-//fim de teste*/
-
-
-
-	//printf("%s\n", buf);
-
-	//write(fd, buf, strlen(buf) + 1);
 	tcsetattr(fd, TCSANOW, &oldtio);
 
 	return 0;

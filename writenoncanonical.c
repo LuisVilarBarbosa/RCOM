@@ -187,14 +187,14 @@ int llwrite(int fd, unsigned char *buffer, int length)
 			case FLAG_RCV:
 				if (ch == A)
 					stateWrite = A_RCV;
-				else{
+				else {
 					stateWrite = STOP_SM;
 					repete = TRUE;
 					tcflush(fd, TCIOFLUSH);
-					}
+				}
 				break;
 			case A_RCV:
-				if (ch == C_RR((pos + 1) % 2)){
+				if (ch == C_RR((pos + 1) % 2)) {
 					stateWrite = C_RCV;
 					repete = FALSE;
 				}
@@ -209,11 +209,11 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				else stateWrite = START;
 				break;
 			case C_RCV:
-				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))){
+				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))) {
 					stateWrite = BCC1_RCV;
 				}
 				else {
-					stateWrite = START;	
+					stateWrite = START;
 				}
 				break;
 			case BCC1_RCV:
@@ -290,24 +290,24 @@ int llclose(int porta) {
 	data[4] = F;
 	data_size = DISC_AND_UA_SIZE;
 	int tr_UA = write(porta, data, data_size);
-	
+
 	printf("Ligacao terminada\n");
 
 	return (tr_DISC == DISC_AND_UA_SIZE && tr_UA == DISC_AND_UA_SIZE) ? 0 : -1;
 }
 
-int writeToSerial(int fd, char fileName[]){
+int writeToSerial(int fd, char fileName[]) {
 
 	int dataFd = open(fileName, O_RDONLY);
-	
-	if(dataFd == -1) {
-	printf("O ficheiro nao pode ser aberto\n");
-	return -1;
+
+	if (dataFd == -1) {
+		printf("O ficheiro nao pode ser aberto\n");
+		return -1;
 	}
-	
+
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
-	
+
 	//	find the size of the file
 	struct stat st;
 	fstat(dataFd, &st);
@@ -315,30 +315,30 @@ int writeToSerial(int fd, char fileName[]){
 	unsigned char appPacket[MAX_SIZE];
 	int appPacketSize = 0;
 	unsigned char * sizeInPackets = (unsigned char*)&fileLength;
-	
+
 	// start packet 
-	appPacket[0] = C_START;		//2
-	appPacket[1] = FILE_SIZE_INDICATOR;	//0
-	appPacket[2] = sizeof(unsigned long); // length é guardada num ulong
+	appPacket[0] = C_START;
+	appPacket[1] = FILE_SIZE_INDICATOR;
+	appPacket[2] = sizeof(unsigned long); // 'length' is stored in an ulong
 	appPacketSize = 3;
-	
+
 	int i;
-	for(i = 0; i < sizeof(unsigned long); i++){
+	for (i = 0; i < sizeof(unsigned long); i++) {
 		appPacket[appPacketSize] = sizeInPackets[i];
 		appPacketSize++;
 	}
-	
-	appPacket[appPacketSize] = FILE_NAME_INDICATOR;	//1
+
+	appPacket[appPacketSize] = FILE_NAME_INDICATOR;
 	appPacketSize++;
 	appPacket[appPacketSize] = strlen(fileName);
 	appPacketSize++;
-	for (i=0 ; i < strlen(fileName); i++){
-		appPacket[appPacketSize] = (unsigned char) fileName[i];
+	for (i = 0; i < strlen(fileName); i++) {
+		appPacket[appPacketSize] = (unsigned char)fileName[i];
 		appPacketSize++;
 	}
-	
+
 	llwrite(fd, appPacket, appPacketSize);
-	
+
 	//sending packets
 	unsigned char fileData[MAX_SIZE];
 	unsigned char fileToSend[MAX_SIZE];
@@ -346,15 +346,15 @@ int writeToSerial(int fd, char fileName[]){
 	unsigned long j;
 	unsigned long size_read = 0;
 	unsigned char sequenceNum = 0;
-	while((size_read = read(dataFd, fileData, FRAME_LENGTH))) {
+	while ((size_read = read(dataFd, fileData, FRAME_LENGTH))) {
 		fileToSend[0] = 1;
 		fileToSend[1] = sequenceNum;
-		fileToSend[2] = (unsigned char) (size_read/256);
-		fileToSend[3] = (unsigned char) (size_read % 256);
-		for(j=0; j < size_read; j++)
-			fileToSend[j+4] = fileData[j];
-		
-		llwrite(fd, fileToSend, size_read+4);
+		fileToSend[2] = (unsigned char)(size_read / 256);
+		fileToSend[3] = (unsigned char)(size_read % 256);
+		for (j = 0; j < size_read; j++)
+			fileToSend[j + 4] = fileData[j];
+
+		llwrite(fd, fileToSend, size_read + 4);
 		i += size_read;
 		sequenceNum++;
 		printf("bytes enviados: %d\n", i);
@@ -377,8 +377,6 @@ int main(int argc, char** argv)
 		printf("Usage:\tnserial SerialPort filename\n\tex: nserial /dev/ttyS1 pinguim.gif\n");
 		exit(1);
 	}
-
-	//gets(buf);
 
 	/*
 	  Open serial port device for reading and writing and not as controlling tty
@@ -418,14 +416,13 @@ int main(int argc, char** argv)
 
 	printf("New termios structure set\n");
 
-	if(writeToSerial(fd, argv[2]) == -1)
-	return -1;
+	if (writeToSerial(fd, argv[2]) == -1)
+		return -1;
 
 	if (tcsetattr(fd, TCSANOW, &oldtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
-
 
 	return 0;
 }
