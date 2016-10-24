@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <time.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -150,19 +151,14 @@ int llread(int fd, unsigned char * buffer)
 	readNumB = 0;
 	parityRead = 0xff;
 	unsigned char ch, antCh, auxAntChar;
-
-	// Supervision frame to be used by the alarm handler
-	/*data[0] = F;
-	data[1] = A;
-	data[2] = C_REJ(pos);
-	data[3] = data[1] ^ data[2];
-	data[4] = F;
-	data_size = 5;*/
-
+	
 	alarmOn();
 	while (stateRead != STOP_SM) {
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
+	       
+		if((rand() % 10000) == 1){	// generate random error
+		  ch = ch ^ 0xb5;printf("Gerou erro.\n");}
 		switch (stateRead) {
 		case START:
 			if (ch == F)
@@ -184,8 +180,7 @@ int llread(int fd, unsigned char * buffer)
 				stateRead = C_RCV;
 			//else if (ch == F)
 			//	stateRead = FLAG_RCV;
-			else{ stateRead = START; 
-				printf("Erro: Recived wrong flag.\n");
+			else{ stateRead = START;
 			}
 			break;
 		case C_RCV:
@@ -362,15 +357,13 @@ int llclose(int porta) {
 	return (tr_DISC == DISC_AND_UA_SIZE) ? 0 : -1;
 }
 
-volatile int STOP = FALSE;
 
+int receiveFromSerial(int fd){
 
+  
 
-
-
-
-
-int reciveFromSerial(int fd){
+  	if (llopen(fd) == -1)
+	  printf("Error occurred executing 'llopen'.\n");
 	
 	unsigned char appControlPacket[MAX_SIZE];
 	int sizeAppCtlPkt = llread(fd, appControlPacket);
@@ -413,10 +406,14 @@ int reciveFromSerial(int fd){
 			break;
 		}
 	}
-	
-	
-	
-	int dataFd = open(nameOfFile, O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666);
+
+	int dataFd = open(nameOfFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  if(dataFd == -1){
+    printf("Unable to create data file.\n");
+    llclose(fd);
+    return -1;
+  }
+
 	unsigned char fileData[MAX_SIZE];
 	unsigned char readData[MAX_SIZE];
 
@@ -447,11 +444,12 @@ int reciveFromSerial(int fd){
 		
 		i += nunOcte;
 		sequenceNum++;
-		printf("bytes passados: %d\n", i);
+		printf("bytes recived: %d\n", i);
 	}
 	
 	write(dataFd, readData, sizeOfFile);
 	close(dataFd);
+	llclose(fd);
 	
 	return 0;
 }
@@ -519,10 +517,9 @@ int main(int argc, char** argv)
 
 	printf("New termios structure set\n");
 
-	if (llopen(fd) == -1)
-		printf("Error occurred executing 'llopen'.\n");
+	srand((unsigned)time(NULL));
 
-	reciveFromSerial(fd);
+	receiveFromSerial(fd);
 
 
 
@@ -562,6 +559,6 @@ int main(int argc, char** argv)
 
 	//write(fd, buf, strlen(buf) + 1);
 	tcsetattr(fd, TCSANOW, &oldtio);
-	llclose(fd);
+
 	return 0;
 }
