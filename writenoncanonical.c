@@ -40,6 +40,7 @@
 #define MAX_SIZE 1048576	/* 1MB */
 #define FILE_SIZE_INDICATOR 0
 #define FILE_NAME_INDICATOR 1
+#define FRAME_LENGTH 512
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
 int stateWrite = START;
@@ -190,8 +191,6 @@ int llwrite(int fd, unsigned char *buffer, int length)
 					stateWrite = STOP_SM;
 					repete = TRUE;
 					tcflush(fd, TCIOFLUSH);
-					break;
-
 					}
 				break;
 			case A_RCV:
@@ -204,7 +203,6 @@ int llwrite(int fd, unsigned char *buffer, int length)
 					//pos = (pos + 1) % 2;	//to receive all the data again
 					repete = TRUE;
 					tcflush(fd, TCIOFLUSH);
-					break;
 				}
 				//else if (ch == F)
 				//	stateWrite = FLAG_RCV;
@@ -232,6 +230,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 }
 
 int llclose(int porta) {
+	printf("A terminar ligação.\n");
 	write_fd = porta;
 
 	data[0] = F;
@@ -291,24 +290,31 @@ int llclose(int porta) {
 	data[4] = F;
 	data_size = DISC_AND_UA_SIZE;
 	int tr_UA = write(porta, data, data_size);
+	
+	printf("Ligacao terminada\n");
 
 	return (tr_DISC == DISC_AND_UA_SIZE && tr_UA == DISC_AND_UA_SIZE) ? 0 : -1;
 }
 
-volatile int STOP = FALSE;
-
-
-
-
-
-
 int writeToSerial(int fd, char fileName[]){
 
+	int dataFd = open(fileName, O_RDONLY);
+	
+	if(dataFd == -1) {
+	printf("O ficheiro nao pode ser aberto\n");
+	return -1;
+	}
+	
+	if (llopen(fd) == -1)
+		printf("Error occurred executing 'llopen'.\n");
+	
 	//	find the size of the file
-	unsigned long fileLegth = 10968;
+	struct stat st;
+	fstat(dataFd, &st);
+	unsigned long fileLength = st.st_size;
 	unsigned char appPacket[MAX_SIZE];
 	int appPacketSize = 0;
-	unsigned char * sizeInPackets = (unsigned char*)&fileLegth;
+	unsigned char * sizeInPackets = (unsigned char*)&fileLength;
 	
 	// start packet 
 	appPacket[0] = C_START;		//2
@@ -322,7 +328,6 @@ int writeToSerial(int fd, char fileName[]){
 		appPacketSize++;
 	}
 	
-	
 	appPacket[appPacketSize] = FILE_NAME_INDICATOR;	//1
 	appPacketSize++;
 	appPacket[appPacketSize] = strlen(fileName);
@@ -333,39 +338,31 @@ int writeToSerial(int fd, char fileName[]){
 	}
 	
 	llwrite(fd, appPacket, appPacketSize);
-	printf("o primeiro e: %d\n",appPacket[0]);
-	printf("enviou %d packets\n", appPacketSize);
-	
-	
 	
 	//sending packets
-	int dataFd = open(fileName, O_RDONLY);
 	unsigned char fileData[MAX_SIZE];
 	unsigned char fileToSend[MAX_SIZE];
 	i = 0;
 	unsigned long j;
 	unsigned long size_read = 0;
 	unsigned char sequenceNum = 0;
-	while((size_read = read(dataFd, fileData, 10))) {
+	while((size_read = read(dataFd, fileData, FRAME_LENGTH))) {
 		fileToSend[0] = 1;
 		fileToSend[1] = sequenceNum;
 		fileToSend[2] = (unsigned char) (size_read/256);
 		fileToSend[3] = (unsigned char) (size_read % 256);
 		for(j=0; j < size_read; j++)
 			fileToSend[j+4] = fileData[j];
-			
+		
 		llwrite(fd, fileToSend, size_read+4);
 		i += size_read;
 		sequenceNum++;
 		printf("bytes enviados: %d\n", i);
 	}
 	close(dataFd);
-	
+	llclose(fd);
 	return 0;
 }
-
-
-
 
 int main(int argc, char** argv)
 {
@@ -374,10 +371,10 @@ int main(int argc, char** argv)
 	int fd;
 	struct termios oldtio, newtio;
 
-	if ((argc < 2) ||
+	if ((argc < 3) ||
 		((strcmp("/dev/ttyS0", argv[1]) != 0) &&
 		(strcmp("/dev/ttyS1", argv[1]) != 0))) {
-		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+		printf("Usage:\tnserial SerialPort filename\n\tex: nserial /dev/ttyS1 pinguim.gif\n");
 		exit(1);
 	}
 
@@ -420,41 +417,15 @@ int main(int argc, char** argv)
 	}
 
 	printf("New termios structure set\n");
-	
-	if (llopen(fd) == -1)
-		printf("Error occurred executing 'llopen'.\n");
 
-
-	writeToSerial(fd, "pinguim.gif");
-	
-	
-	/*//teste
-	dataFd = open("pinguim.gif", O_RDONLY);
-
-	for (i = 0; i < MAX_SIZE && (size_read = read(dataFd, &fileData[i], 1)); i++){
-		llwrite(fd, &fileData[i], size_read);
-	}
-	close(dataFd);
-	//fim de teste*/
-
-	//res = write(fd, buf, strlen(buf) + 1);
-	//printf("%d bytes written\n", res);
-
-
-	/*i = 0;
-	while (STOP == FALSE) {
-		res = read(fd, &buf[i], 1);
-		if (buf[i] == '\0')
-			STOP = TRUE;
-		i += res;
-	}
-	printf("%s\n", buf);*/
+	if(writeToSerial(fd, argv[2]) == -1)
+	return -1;
 
 	if (tcsetattr(fd, TCSANOW, &oldtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
 
-	llclose(fd);
+
 	return 0;
 }
