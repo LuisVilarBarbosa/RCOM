@@ -65,8 +65,11 @@ void answer_alarm()
 		stateWrite = START;
 		if (alarm_calls < 3)	// to resend the data 3 times
 			alarm(TIME_OUT);
-		else
+		else {
 			alarm_on = FALSE;
+			printf("All attempts to resend the data failed.\n");
+			exit(1);
+		}
 	}
 }
 
