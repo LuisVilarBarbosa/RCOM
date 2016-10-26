@@ -1,56 +1,16 @@
 /*Non-Canonical Input Processing*/
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <termios.h>
 #include <time.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-#define BAUDRATE B38400
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
-#define TRANSMITTER 0
-#define RECEIVER 1
-#define SET_AND_UA_SIZE 5
-#define DISC_AND_UA_SIZE 5
-#define F 0x7E
-#define A 0x03
-#define C_SET 0x03
-#define C_DISC 0x0b
-#define C_UA 0x07
-#define C_SEND(S) (S << 6)
-#define C_RR(R) ((R << 7) | 0x05)
-#define C_REJ(R) ((R << 7) | 0x01)
-#define C_START 2
-#define START 0
-#define FLAG_RCV 1
-#define A_RCV 2
-#define C_RCV 3
-#define BCC_OK 4
-#define STOP_SM 5
-#define BCC1_RCV 6
-#define RCV_DATA 7
-#define BCC2_RCV 8
-#define TIME_OUT 3
-#define ESC 0x7d
-#define MAX_SIZE 1048576	/* 1MB */
-#define FILE_SIZE_INDICATOR 0
-#define FILE_NAME_INDICATOR 1
+#include "common.h"
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
-unsigned char data[MAX_SIZE];
+unsigned char data[MAX_SIZE], max_alarm_calls = 3, time_out = TIME_OUT;
 int stateRead = START, readNumB = 0, parityRead = 0xff;
 
 void alarmOn() {
 	alarm_on = TRUE;
 	alarm_calls = 0;
-	alarm(TIME_OUT);
+	alarm(time_out);
 }
 
 void alarmOff() {
@@ -66,8 +26,8 @@ void answer_alarm()
 		stateRead = START;
 		readNumB = 0;
 		parityRead = 0xff;
-		if (alarm_calls < 3)	// to resend the data 3 times
-			alarm(TIME_OUT);
+		if (alarm_calls < max_alarm_calls)	// to resend the data 3 times
+			alarm(time_out);
 		else {
 			alarm_on = FALSE;
 			printf("All attempts to resend the data failed.\n");
@@ -465,19 +425,29 @@ int main(int argc, char** argv)
 	int fd;
 	struct termios oldtio, newtio;
 
-	if ((argc < 2) ||
+	if ((argc != 5) ||
 		((strcmp("/dev/ttyS0", argv[1]) != 0) &&
 		(strcmp("/dev/ttyS1", argv[1]) != 0))) {
-		printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+		printf("Usage:\tnserial SerialPort BaudRate AlarmCalls TimeOut\n\tex: nserial /dev/ttyS1 38400 3 3\n");
+		showBaudrates();
 		exit(1);
 	}
+
+	char *serial_port = argv[1];
+	tcflag_t baudrate;
+	chooseBaudrate(argv[2], &baudrate);
+	max_alarm_calls = atoi(argv[3]);
+	time_out = atoi(argv[4]);
+
+	if (max_alarm_calls < 0 || time_out <= 0)
+		printf("At least one value is invalid.\n");
 
 	/*
 	  Open serial port device for reading and writing and not as controlling tty
 	  because we don't want to get killed if linenoise sends CTRL-C.
 	*/
 
-	fd = open(argv[1], O_RDWR | O_NOCTTY);
+	fd = open(serial_port, O_RDWR | O_NOCTTY);
 	if (fd < 0) { perror(argv[1]); exit(-1); }
 
 	if (tcgetattr(fd, &oldtio) == -1) { /* save current port settings */
@@ -486,7 +456,7 @@ int main(int argc, char** argv)
 	}
 
 	bzero(&newtio, sizeof(newtio));
-	newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+	newtio.c_cflag = baudrate | CS8 | CLOCAL | CREAD;
 	newtio.c_iflag = IGNPAR;
 	newtio.c_oflag = 0;
 

@@ -1,55 +1,15 @@
 /*Non-Canonical Input Processing*/
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <termios.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-#define BAUDRATE B38400
-#define MODEMDEVICE "/dev/ttyS1"
-#define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
-#define TRANSMITTER 0
-#define RECEIVER 1
-#define SET_AND_UA_SIZE 5
-#define DISC_AND_UA_SIZE 5
-#define F 0x7e
-#define A 0x03
-#define C_SET 0x03
-#define C_DISC 0x0b
-#define C_UA 0x07
-#define C_SEND(S) (S << 6)
-#define C_RR(R) ((R << 7) | 0x05)
-#define C_REJ(R) ((R << 7) | 0x01)
-#define C_START 2
-#define START 0
-#define FLAG_RCV 1
-#define A_RCV 2
-#define C_RCV 3
-#define BCC_OK 4
-#define STOP_SM 5
-#define BCC1_RCV 6
-#define TIME_OUT 3
-#define ESC 0x7d
-#define MAX_SIZE 1048576	/* 1MB */
-#define FILE_SIZE_INDICATOR 0
-#define FILE_NAME_INDICATOR 1
-#define FRAME_LENGTH 512
+#include "common.h"
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
-int stateWrite = START;
+int stateWrite = START, max_alarm_calls = 3, time_out = TIME_OUT;
 unsigned char data[MAX_SIZE];
 
 void alarmOn() {
 	alarm_on = TRUE;
 	alarm_calls = 0;
-	alarm(TIME_OUT);
+	alarm(time_out);
 }
 
 void alarmOff() {
@@ -63,8 +23,8 @@ void answer_alarm()
 		write(write_fd, data, data_size);
 		printf("Resend %d of the data.\n", alarm_calls);
 		stateWrite = START;
-		if (alarm_calls < 3)	// to resend the data 3 times
-			alarm(TIME_OUT);
+		if (alarm_calls < max_alarm_calls)	// to resend the data 3 times
+			alarm(time_out);
 		else {
 			alarm_on = FALSE;
 			printf("All attempts to resend the data failed.\n");
@@ -299,7 +259,7 @@ int llclose(int porta) {
 	return (tr_DISC == DISC_AND_UA_SIZE && tr_UA == DISC_AND_UA_SIZE) ? 0 : -1;
 }
 
-int writeToSerial(int fd, char fileName[]) {
+int writeToSerial(int fd, char fileName[], int frame_length) {
 
 	int dataFd = open(fileName, O_RDONLY);
 
@@ -349,7 +309,7 @@ int writeToSerial(int fd, char fileName[]) {
 	unsigned long j;
 	unsigned long size_read = 0;
 	unsigned char sequenceNum = 0;
-	while ((size_read = read(dataFd, fileData, FRAME_LENGTH))) {
+	while ((size_read = read(dataFd, fileData, frame_length))) {
 		fileToSend[0] = 1;
 		fileToSend[1] = sequenceNum;
 		fileToSend[2] = (unsigned char)(size_read / 256);
@@ -374,20 +334,32 @@ int main(int argc, char** argv)
 	int fd;
 	struct termios oldtio, newtio;
 
-	if ((argc < 3) ||
+	if ((argc != 7) ||
 		((strcmp("/dev/ttyS0", argv[1]) != 0) &&
 		(strcmp("/dev/ttyS1", argv[1]) != 0))) {
-		printf("Usage:\tnserial SerialPort filename\n\tex: nserial /dev/ttyS1 pinguim.gif\n");
+		printf("Usage:\tnserial SerialPort Filename BaudRate FrameLength AlarmCalls TimeOut\n\tex: nserial /dev/ttyS1 pinguim.gif 38400 512 3 3\n");
+		showBaudrates();
 		exit(1);
 	}
+
+	char *serial_port = argv[1];
+	char *filename = argv[2];
+	tcflag_t baudrate;
+	chooseBaudrate(argv[3], &baudrate);
+	int frame_length = atoi(argv[4]);
+	max_alarm_calls = atoi(argv[5]);
+	time_out = atoi(argv[6]);
+
+	if (frame_length < 1 || frame_length > MAX_SIZE - 20 || max_alarm_calls < 0 || time_out <= 0)
+		printf("At least one value is invalid.\n");
 
 	/*
 	  Open serial port device for reading and writing and not as controlling tty
 	  because we don't want to get killed if linenoise sends CTRL-C.
 	*/
 
-	fd = open(argv[1], O_RDWR | O_NOCTTY);
-	if (fd < 0) { perror(argv[1]); exit(-1); }
+	fd = open(serial_port, O_RDWR | O_NOCTTY);
+	if (fd < 0) { perror(filename); exit(-1); }
 
 	if (tcgetattr(fd, &oldtio) == -1) { /* save current port settings */
 		perror("tcgetattr");
@@ -395,7 +367,7 @@ int main(int argc, char** argv)
 	}
 
 	bzero(&newtio, sizeof(newtio));
-	newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+	newtio.c_cflag = baudrate | CS8 | CLOCAL | CREAD;
 	newtio.c_iflag = IGNPAR;
 	newtio.c_oflag = 0;
 
@@ -419,7 +391,7 @@ int main(int argc, char** argv)
 
 	printf("New termios structure set\n");
 
-	if (writeToSerial(fd, argv[2]) == -1)
+	if (writeToSerial(fd, filename, frame_length) == -1)
 		return -1;
 
 	if (tcsetattr(fd, TCSANOW, &oldtio) == -1) {
