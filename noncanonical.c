@@ -7,6 +7,87 @@ volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
 unsigned char data[MAX_SIZE], max_alarm_calls = 3, time_out = TIME_OUT;
 int stateRead = START, readNumB = 0, parityRead = 0xff;
 
+////////////////////////////////
+////////////////////////////////
+//////POR NOUTRO FICHEIRO///////
+////////////////////////////////
+////////////////////////////////
+typedef struct {
+	int sentFrames;
+	int receivedFrames;
+
+	int sentPackets;
+	int receivedPackets;
+
+	int sentBytes;
+	int receivedBytes;
+	int fileSize;
+
+	int timeouts;
+
+	int sentRR;
+	int receivedRR;
+
+	int sentREJ;
+	int receivedREJ;
+} Statistics;
+Statistics stats;
+void printStatistics(){
+	printf("\n");
+	printf("=======================\n");
+	printf("=CONNECTION STATISTICS=\n");
+	printf("=======================\n");
+
+	printf("Sent frames:      %d\n", stats.sentFrames);
+	printf("Received frames:  %d\n", stats.receivedFrames);
+	printf("\n");
+	printf("Timeouts:         %d\n", stats.timeouts);
+	printf("\n");
+	printf("Sent RR:          %d\n", stats.sentRR);
+	printf("Received RR:      %d\n", stats.receivedRR);
+	printf("\n");
+	printf("Sent REJ:         %d\n", stats.sentREJ);
+	printf("Received REJ:     %d\n", stats.receivedREJ);
+	printf("\n");
+	printf("Received Bytes:   %d\n", stats.receivedBytes);
+	printf("Sents Bytes:      %d\n", stats.sentBytes);
+	printf("FileSize:         %d Bytes\n", stats.fileSize);
+	printf("\n");
+	printf("Sent packets:     %d\n", stats.sentPackets);
+	printf("Received packets: %d\n", stats.receivedPackets);
+}
+
+Statistics initStatistics(){
+
+	stats.sentFrames = 0;
+	stats.receivedFrames = 0;
+
+	stats.timeouts = 0;
+
+	stats.sentRR = 0;
+	stats.receivedRR = 0;
+
+	stats.sentREJ = 0;
+	stats.receivedREJ = 0;
+
+	stats.sentPackets = 0;
+	stats.receivedPackets = 0;
+
+	stats.sentBytes = 0;
+	stats.receivedBytes = 0;
+	stats.fileSize = 0;
+
+
+	return stats;
+}
+////////////////////////////////
+////////////////////////////////
+//////POR NOUTRO FICHEIRO///////
+////////////////////////////////
+////////////////////////////////
+
+
+
 void alarmOn() {
 	alarm_on = TRUE;
 	alarm_calls = 0;
@@ -19,9 +100,11 @@ void alarmOff() {
 
 void answer_alarm()
 {
+	stats.timeouts++;
 	if (alarm_on == TRUE) {
 		alarm_calls++;
 		write(write_fd, data, data_size);
+		stats.sentBytes += data_size;
 		printf("Resend %d of the data.\n", alarm_calls);
 		stateRead = START;
 		readNumB = 0;
@@ -38,7 +121,11 @@ void answer_alarm()
 
 void sendREJ(int fd, int position){
 	// Supervision frame in case of failure
+	stats.sentREJ++;
 	tcflush(fd, TCIOFLUSH);
+	stateRead = START;
+	readNumB = 0;
+	parityRead = 0xff;
 	unsigned char dataREJ[5];
 	//printf("sendREJ chamada\n");
 	dataREJ[0] = F;
@@ -48,6 +135,8 @@ void sendREJ(int fd, int position){
 	dataREJ[4] = F;
 	int dataREJ_size = 5;
 	write(fd, dataREJ, dataREJ_size);
+	stats.sentBytes += dataREJ_size;
+
 }
 
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
@@ -57,6 +146,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	while (state != STOP_SM) {
 		if (read(porta, &SET_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'SET_char' on 'llopen'.\n");
+			stats.receivedBytes++;
 		switch (state) {
 		case START:
 			if (SET_char == F)
@@ -91,6 +181,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 			break;
 		}
 	}
+	stats.receivedFrames++;
 
 	data[0] = F;
 	data[1] = A;
@@ -99,7 +190,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	data[4] = F;
 	data_size = SET_AND_UA_SIZE;
 	int tr = write(porta, data, data_size);
-
+	stats.sentBytes += data_size;
 	return (tr == data_size) ? 0 : -1;
 }
 
@@ -115,10 +206,10 @@ int llread(int fd, unsigned char * buffer)
 	parityRead = 0xff;
 	unsigned char ch, antCh, auxAntChar;
 	
-	alarmOn();
 	while (stateRead != STOP_SM) {
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
+		stats.receivedBytes++;
 	       
 		if((rand() % 10000) == 1){	// generate random error
 		  ch = ch ^ 0xb5;printf("Gerou erro.\n");}
@@ -126,42 +217,53 @@ int llread(int fd, unsigned char * buffer)
 		case START:
 			if (ch == F)
 				stateRead = FLAG_RCV;
-			// else stateRead = START;
+			else{
+				sendREJ(fd, pos);			
+				stateRead = START;
+			}
 			break;
 		case FLAG_RCV:
 			if (ch == A)
 				stateRead = A_RCV;
 			else{ 
-				sendREJ(fd, pos);
-				
-			//	printf("chegou mal ao pos.1\n");			
+				sendREJ(fd, pos);		
 				stateRead = START;
 			}
 			break;
 		case A_RCV:
 			if (ch == C_SEND(pos))
 				stateRead = C_RCV;
-			//else if (ch == F)
-			//	stateRead = FLAG_RCV;
-			else{ stateRead = START;
+			else{
+					sendREJ(fd, pos);
+					stateRead = START;
 			}
 			break;
 		case C_RCV:
 			if (ch == (A ^ C_SEND(pos)))	// BCC1
 				stateRead = RCV_DATA;
-			else if (ch == F)
-				stateRead = FLAG_RCV;
-			else stateRead = START;
+			else{
+				 sendREJ(fd, pos);
+				 stateRead = START;
+				}
 			break;
 		case RCV_DATA:
 			if (ch == parityRead) {	// BCC2
 				stateRead = BCC2_RCV;
 				antCh = ch;
 			}
-			else {
+			else if(ch == F){
+				sendREJ(fd, pos);
+				stateRead = START;
+			}else {
 				if (ch == ESC) {
 					if (read(fd, &ch, 1) != 1)
 						printf("A problem occurred reading on 'llread'.\n");
+						if(ch == F){
+								sendREJ(fd, pos);
+								stateRead = START;
+								break;
+							}
+					stats.receivedBytes++;
 					ch = ch ^ 0x20;
 				}
 				buffer[readNumB] = ch;
@@ -198,6 +300,12 @@ int llread(int fd, unsigned char * buffer)
 					if (ch == ESC) {
 						if (read(fd, &ch, 1) != 1)
 							printf("A problem occurred reading on 'llread'.\n");
+							if(ch == F){
+								sendREJ(fd, pos);
+								stateRead = START;
+								break;
+							}
+						stats.receivedBytes++;
 						ch = ch ^ 0x20;
 					}
 					buffer[readNumB] = ch;
@@ -209,7 +317,8 @@ int llread(int fd, unsigned char * buffer)
 			break;
 		}
 	}
-	alarmOff();
+	stats.receivedFrames++;
+
 
 	pos = (pos + 1) % 2;
 
@@ -221,6 +330,8 @@ int llread(int fd, unsigned char * buffer)
 	data[4] = F;
 	data_size = 5;
 	write(write_fd, data, data_size);
+	stats.sentRR++;
+	stats.sentBytes += data_size;
 	return readNumB;
 }
 
@@ -232,6 +343,7 @@ int llclose(int porta) {
 	while (state != STOP_SM) {
 		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
+		stats.receivedBytes++;
 		switch (state) {
 		case START:
 			if (DISC_char == F)
@@ -266,6 +378,7 @@ int llclose(int porta) {
 			break;
 		}
 	}
+	stats.receivedFrames++;
 
 	data[0] = F;
 	data[1] = A;
@@ -274,13 +387,15 @@ int llclose(int porta) {
 	data[4] = F;
 	data_size = DISC_AND_UA_SIZE;
 	int tr_DISC = write(porta, data, data_size);
-
+	stats.sentBytes += data_size;
+	
 	alarmOn();
 	unsigned char UA_char;
 	state = START;
 	while (state != STOP_SM) {
 		if (read(write_fd, &UA_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'UA_char' on 'llclose'.\n");
+		stats.receivedBytes++;
 		switch (state) {
 		case START:
 			if (UA_char == F)
@@ -315,6 +430,7 @@ int llclose(int porta) {
 			break;
 		}
 	}
+	stats.receivedFrames++;
 	alarmOff();
 	printf("Ligacao terminada\n");
 	return (tr_DISC == DISC_AND_UA_SIZE) ? 0 : -1;
@@ -322,12 +438,9 @@ int llclose(int porta) {
 
 
 int receiveFromSerial(int fd){
-
-  
-
   	if (llopen(fd) == -1)
 	  printf("Error occurred executing 'llopen'.\n");
-	
+	initStatistics();
 	unsigned char appControlPacket[MAX_SIZE];
 	int sizeAppCtlPkt = llread(fd, appControlPacket);
 	int sizeOfFile = 0;
@@ -376,7 +489,8 @@ int receiveFromSerial(int fd){
     llclose(fd);
     return -1;
   }
-
+	stats.receivedPackets++;
+	stats.fileSize = sizeOfFile;
 	unsigned char fileData[MAX_SIZE];
 	unsigned char readData[MAX_SIZE];
 
@@ -387,6 +501,7 @@ int receiveFromSerial(int fd){
 
 	while (i < sizeOfFile){
 		llread(fd, fileData);
+		stats.receivedPackets++;
 		
 		if(fileData[0] != 1){
 			printf("Erro receiving data packets: control field wrong.\n");
@@ -413,7 +528,7 @@ int receiveFromSerial(int fd){
 	write(dataFd, readData, sizeOfFile);
 	close(dataFd);
 	llclose(fd);
-	
+	printStatistics();
 	return 0;
 }
 
