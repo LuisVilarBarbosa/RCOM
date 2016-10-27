@@ -1,10 +1,91 @@
 /*Non-Canonical Input Processing*/
 
 #include "common.h"
+//#include "stats.c"
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
 int stateWrite = START, max_alarm_calls = 3, time_out = TIME_OUT;
 unsigned char data[MAX_SIZE];
+
+////////////////////////////////
+////////////////////////////////
+//////POR NOUTRO FICHEIRO///////
+////////////////////////////////
+////////////////////////////////
+typedef struct {
+	int sentFrames;
+	int receivedFrames;
+
+	int sentPackets;
+	int receivedPackets;
+
+	int sentBytes;
+	int receivedBytes;
+	int fileSize;
+
+	int timeouts;
+
+	int sentRR;
+	int receivedRR;
+
+	int sentREJ;
+	int receivedREJ;
+} Statistics;
+Statistics stats;
+void printStatistics(){
+	printf("\n");
+	printf("=======================\n");
+	printf("=CONNECTION STATISTICS=\n");
+	printf("=======================\n");
+
+	printf("Sent frames:      %d\n", stats.sentFrames);
+	printf("Received frames:  %d\n", stats.receivedFrames);
+	printf("\n");
+	printf("Timeouts:         %d\n", stats.timeouts);
+	printf("\n");
+	printf("Sent RR:          %d\n", stats.sentRR);
+	printf("Received RR:      %d\n", stats.receivedRR);
+	printf("\n");
+	printf("Sent REJ:         %d\n", stats.sentREJ);
+	printf("Received REJ:     %d\n", stats.receivedREJ);
+	printf("\n");
+	printf("Received Bytes:   %d\n", stats.receivedBytes);
+	printf("Sents Bytes:      %d\n", stats.sentBytes);
+	printf("FileSize:         %d Bytes\n", stats.fileSize);
+	printf("\n");
+	printf("Sent packets:     %d\n", stats.sentPackets);
+	printf("Received packets: %d\n", stats.receivedPackets);
+}
+
+Statistics initStatistics(){
+
+	stats.sentFrames = 0;
+	stats.receivedFrames = 0;
+
+	stats.timeouts = 0;
+
+	stats.sentRR = 0;
+	stats.receivedRR = 0;
+
+	stats.sentREJ = 0;
+	stats.receivedREJ = 0;
+
+	stats.sentPackets = 0;
+	stats.receivedPackets = 0;
+
+	stats.sentBytes = 0;
+	stats.receivedBytes = 0;
+	stats.fileSize = 0;
+
+
+	return stats;
+}
+////////////////////////////////
+////////////////////////////////
+//////POR NOUTRO FICHEIRO///////
+////////////////////////////////
+////////////////////////////////
+
 
 void alarmOn() {
 	alarm_on = TRUE;
@@ -18,9 +99,11 @@ void alarmOff() {
 
 void answer_alarm()
 {
+	stats.timeouts++;
 	if (alarm_on == TRUE) {
 		alarm_calls++;
 		write(write_fd, data, data_size);
+		stats.sentBytes += data_size;
 		printf("Resend %d of the data.\n", alarm_calls);
 		stateWrite = START;
 		if (alarm_calls < max_alarm_calls)	// to resend the data 3 times
@@ -44,6 +127,8 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	data[4] = F;
 	data_size = SET_AND_UA_SIZE;
 	int tr = write(write_fd, data, data_size);
+	stats.sentBytes += data_size;
+	stats.sentFrames++;
 
 	alarmOn();
 	unsigned char UA_char;
@@ -51,11 +136,11 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	while (state != STOP_SM) {
 		if (read(porta, &UA_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'UA_char' on 'llopen'.\n");
+		stats.receivedBytes++;
 		switch (state) {
 		case START:
 			if (UA_char == F)
 				state = FLAG_RCV;
-			//else state = START;
 			break;
 		case FLAG_RCV:
 			if (UA_char == A)
@@ -97,14 +182,13 @@ int llwrite(int fd, unsigned char *buffer, int length)
 	write_fd = fd;
 	int repete = TRUE;
 	while (repete == TRUE) {
-		//printf("Data layer writing 'information frame' to the serial conexion.\n");
 		// Header
 		data[0] = F;
 		data[1] = A;
 		data[2] = C_SEND(pos);
 		data[3] = (data[1] ^ data[2]);		// BCC1
 		data_size = 4;
-
+		
 		// Data from the application level
 		int i;
 		for (i = 0; i < length; i++) {
@@ -131,16 +215,19 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		data[data_size] = F;
 		data_size++;
 		write(write_fd, data, data_size);
+		stats.sentFrames++;
+		stats.sentBytes += data_size;
 
 		//pos = (pos + 1) % 2;
 
-		//printf("Data layer reading 'supervision frame' from the serial conexion.\n");
 		alarmOn();
 		unsigned char ch;
 		stateWrite = START;
 		while (stateWrite != STOP_SM) {
+
 			if (read(fd, &ch, 1) != 1)
 				printf("A problem occurred reading a byte on 'llwrite'.\n");
+			stats.receivedBytes++;
 			switch (stateWrite) {
 			case START:
 				if (ch == F)
@@ -159,30 +246,40 @@ int llwrite(int fd, unsigned char *buffer, int length)
 			case A_RCV:
 				if (ch == C_RR((pos + 1) % 2)) {
 					stateWrite = C_RCV;
+					stats.receivedRR++;
 					repete = FALSE;
 				}
-				else if (ch == C_REJ(pos) || ch == C_REJ((pos + 1) % 2)) {
+				else if (ch == C_REJ(pos)) {
 					stateWrite = STOP_SM;
-					//pos = (pos + 1) % 2;	//to receive all the data again
 					repete = TRUE;
+					stats.receivedREJ++;
 					tcflush(fd, TCIOFLUSH);
 				}
-				//else if (ch == F)
-				//	stateWrite = FLAG_RCV;
-				else stateWrite = START;
+				else{
+				 	stateWrite = STOP_SM;
+					repete = TRUE;
+					tcflush(fd, TCIOFLUSH);
+				 }
 				break;
 			case C_RCV:
 				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))) {
 					stateWrite = BCC1_RCV;
 				}
 				else {
-					stateWrite = START;
+				 	stateWrite = STOP_SM;
+					repete = TRUE;
+					tcflush(fd, TCIOFLUSH);
 				}
 				break;
 			case BCC1_RCV:
-				if (ch == F)
-					stateWrite = STOP_SM;
-				else stateWrite = START;
+				if (ch == F){
+						stateWrite = STOP_SM;
+					}
+				else{
+				 	stateWrite = STOP_SM;
+					repete = TRUE;
+					tcflush(fd, TCIOFLUSH);
+				}
 				break;
 			}
 		}
@@ -203,6 +300,8 @@ int llclose(int porta) {
 	data[4] = F;
 	data_size = DISC_AND_UA_SIZE;
 	int tr_DISC = write(write_fd, data, data_size);
+	stats.sentFrames++;
+	stats.sentBytes += data_size;
 
 	alarmOn();
 	unsigned char DISC_char;
@@ -210,6 +309,7 @@ int llclose(int porta) {
 	while (state != STOP_SM) {
 		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
+		stats.receivedBytes++;
 		switch (state) {
 		case START:
 			if (DISC_char == F)
@@ -253,6 +353,8 @@ int llclose(int porta) {
 	data[4] = F;
 	data_size = DISC_AND_UA_SIZE;
 	int tr_UA = write(porta, data, data_size);
+	stats.sentFrames++;
+	stats.sentBytes += data_size;
 
 	printf("Ligacao terminada\n");
 
@@ -261,6 +363,7 @@ int llclose(int porta) {
 
 int writeToSerial(int fd, char fileName[], int frame_length) {
 
+	initStatistics();
 	int dataFd = open(fileName, O_RDONLY);
 
 	if (dataFd == -1) {
@@ -271,10 +374,10 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
 
-	//	find the size of the file
 	struct stat st;
 	fstat(dataFd, &st);
 	unsigned long fileLength = st.st_size;
+ 	stats.fileSize = (int)fileLength;
 	unsigned char appPacket[MAX_SIZE];
 	int appPacketSize = 0;
 	unsigned char * sizeInPackets = (unsigned char*)&fileLength;
@@ -301,6 +404,8 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 	}
 
 	llwrite(fd, appPacket, appPacketSize);
+	stats.sentPackets++;
+
 
 	//sending packets
 	unsigned char fileData[MAX_SIZE];
@@ -318,12 +423,14 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 			fileToSend[j + 4] = fileData[j];
 
 		llwrite(fd, fileToSend, size_read + 4);
+		stats.sentPackets++;
 		i += size_read;
 		sequenceNum++;
 		printf("bytes enviados: %d\n", i);
 	}
 	close(dataFd);
 	llclose(fd);
+	printStatistics();
 	return 0;
 }
 
