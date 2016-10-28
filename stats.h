@@ -18,6 +18,8 @@ typedef struct {
 	int receivedREJ;
 } Statistics;
 
+Statistics stats;
+
 void printStatistics() {
 	printf("\n");
 	printf("=======================\n");
@@ -44,8 +46,6 @@ void printStatistics() {
 }
 
 Statistics initStatistics() {
-	Statistics stats;
-
 	stats.sentFrames = 0;
 	stats.receivedFrames = 0;
 
