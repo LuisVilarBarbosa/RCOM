@@ -3,8 +3,9 @@
 #include "common.h"
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
-int stateWrite = START, max_alarm_calls = 3, time_out = TIME_OUT;
+int max_alarm_calls = 3, time_out = TIME_OUT;
 unsigned char data[MAX_SIZE];
+Statistics stats;
 
 void alarmOn() {
 	alarm_on = TRUE;
@@ -23,20 +24,21 @@ void answer_alarm()
 		alarm_calls++;
 		write(write_fd, data, data_size);
 		stats.sentBytes += data_size;
+		stats.sentFrames++;
 		printf("Resend %d of the data.\n", alarm_calls);
-		stateWrite = START;
-		if (alarm_calls < max_alarm_calls)	// to resend the data 3 times
+		if (alarm_calls < max_alarm_calls)	// to resend the data 'max_alarm_calls' times
 			alarm(time_out);
 		else {
 			alarm_on = FALSE;
 			printf("All attempts to resend the data failed.\n");
-			exit(1);
+			exit(-1);
 		}
 	}
 }
 
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 {
+	printf("Opening connection.\n");
 	write_fd = porta;
 
 	data[0] = F;
@@ -44,14 +46,14 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	data[2] = C_SET;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
-	data_size = SET_AND_UA_SIZE;
+	data_size = 5;
 	int tr = write(write_fd, data, data_size);
 	stats.sentBytes += data_size;
 	stats.sentFrames++;
 
-	alarmOn();
 	unsigned char UA_char;
 	int state = START;
+	alarmOn();
 	while (state != STOP_SM) {
 		if (read(porta, &UA_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'UA_char' on 'llopen'.\n");
@@ -60,6 +62,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 		case START:
 			if (UA_char == F)
 				state = FLAG_RCV;
+			//else state = START;
 			break;
 		case FLAG_RCV:
 			if (UA_char == A)
@@ -90,7 +93,8 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 		}
 	}
 	alarmOff();
-
+	stats.receivedFrames++;
+	printf("Connection opened.\n");
 	return (tr == data_size) ? 0 : -1;
 }
 
@@ -99,8 +103,10 @@ volatile int pos = 0;	// can be 0 or 1, it is used by llwrite
 int llwrite(int fd, unsigned char *buffer, int length)
 {
 	write_fd = fd;
-	int repete = TRUE;
-	while (repete == TRUE) {
+
+	int repeat = TRUE;
+	while (repeat == TRUE) {
+		repeat = FALSE;
 		// Header
 		data[0] = F;
 		data[1] = A;
@@ -134,73 +140,65 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		data[data_size] = F;
 		data_size++;
 		write(write_fd, data, data_size);
-		stats.sentFrames++;
 		stats.sentBytes += data_size;
+		stats.sentFrames++;
 
-		//pos = (pos + 1) % 2;
-
-		alarmOn();
 		unsigned char ch;
-		stateWrite = START;
-		while (stateWrite != STOP_SM) {
-
+		int state = START;
+		alarmOn();
+		while (state != STOP_SM) {
 			if (read(fd, &ch, 1) != 1)
 				printf("A problem occurred reading a byte on 'llwrite'.\n");
 			stats.receivedBytes++;
-			switch (stateWrite) {
+			switch (state) {
 			case START:
 				if (ch == F)
-					stateWrite = FLAG_RCV;
-				//else stateWrite = START;
+					state = FLAG_RCV;
+				//else state = START;
 				break;
 			case FLAG_RCV:
 				if (ch == A)
-					stateWrite = A_RCV;
+					state = A_RCV;
 				else {
-					stateWrite = STOP_SM;
-					repete = TRUE;
-					tcflush(fd, TCIOFLUSH);
+					state = STOP_SM;
+					repeat = TRUE;
 				}
 				break;
 			case A_RCV:
 				if (ch == C_RR((pos + 1) % 2)) {
-					stateWrite = C_RCV;
+					state = C_RCV;
 					stats.receivedRR++;
-					repete = FALSE;
 				}
 				else if (ch == C_REJ(pos)) {
-					stateWrite = STOP_SM;
-					repete = TRUE;
+					state = STOP_SM;
+					repeat = TRUE;
 					stats.receivedREJ++;
-					tcflush(fd, TCIOFLUSH);
 				}
 				else {
-					stateWrite = STOP_SM;
-					repete = TRUE;
-					tcflush(fd, TCIOFLUSH);
+					state = STOP_SM;
+					repeat = TRUE;
 				}
 				break;
 			case C_RCV:
-				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))) {
-					stateWrite = BCC1_RCV;
-				}
+				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos)))
+					state = BCC1_RCV;
 				else {
-					stateWrite = STOP_SM;
-					repete = TRUE;
-					tcflush(fd, TCIOFLUSH);
+					state = STOP_SM;
+					repeat = TRUE;
 				}
 				break;
 			case BCC1_RCV:
-				if (ch == F) {
-					stateWrite = STOP_SM;
-				}
+				if (ch == F)
+					state = STOP_SM;
 				else {
-					stateWrite = STOP_SM;
-					repete = TRUE;
-					tcflush(fd, TCIOFLUSH);
+					state = STOP_SM;
+					repeat = TRUE;
 				}
 				break;
 			}
+
+			if (repeat == TRUE)
+				tcflush(fd, TCIOFLUSH);
 		}
 		alarmOff();
 	}
@@ -209,7 +207,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 }
 
 int llclose(int porta) {
-	printf("A terminar ligação.\n");
+	printf("Closing connection.\n");
 	write_fd = porta;
 
 	data[0] = F;
@@ -217,14 +215,14 @@ int llclose(int porta) {
 	data[2] = C_DISC;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
-	data_size = DISC_AND_UA_SIZE;
+	data_size = 5;
 	int tr_DISC = write(write_fd, data, data_size);
-	stats.sentFrames++;
 	stats.sentBytes += data_size;
+	stats.sentFrames++;
 
-	alarmOn();
 	unsigned char DISC_char;
 	int state = START;
+	alarmOn();
 	while (state != STOP_SM) {
 		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
@@ -270,28 +268,31 @@ int llclose(int porta) {
 	data[2] = C_UA;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
-	data_size = DISC_AND_UA_SIZE;
+	data_size = 5;
 	int tr_UA = write(porta, data, data_size);
 	stats.sentFrames++;
 	stats.sentBytes += data_size;
 
-	printf("Ligacao terminada\n");
+	printf("Connection closed.\n");
 
-	return (tr_DISC == DISC_AND_UA_SIZE && tr_UA == DISC_AND_UA_SIZE) ? 0 : -1;
+	return (tr_DISC == 5 && tr_UA == 5) ? 0 : -1;
 }
 
 int writeToSerial(int fd, char fileName[], int frame_length) {
 
-	initStatistics();
 	int dataFd = open(fileName, O_RDONLY);
 
 	if (dataFd == -1) {
-		printf("O ficheiro nao pode ser aberto\n");
+		printf("Couldn't open the data file.\n");
 		return -1;
 	}
 
-	if (llopen(fd) == -1)
+	if (llopen(fd) == -1) {
 		printf("Error occurred executing 'llopen'.\n");
+		return -1;
+	}
+
+	stats = initStatistics();
 
 	struct stat st;
 	fstat(dataFd, &st);
@@ -299,7 +300,7 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 	stats.fileSize = (int)fileLength;
 	unsigned char appPacket[MAX_SIZE];
 	int appPacketSize = 0;
-	unsigned char * sizeInPackets = (unsigned char*)&fileLength;
+	unsigned char *sizeInPackets = (unsigned char*)&fileLength;
 
 	// start packet 
 	appPacket[0] = C_START;
@@ -349,7 +350,7 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 	}
 	close(dataFd);
 	llclose(fd);
-	printStatistics();
+	printStatistics(stats);
 	return 0;
 }
 
@@ -376,8 +377,10 @@ int main(int argc, char** argv)
 	max_alarm_calls = atoi(argv[5]);
 	time_out = atoi(argv[6]);
 
-	if (frame_length < 1 || frame_length > MAX_SIZE - 20 || max_alarm_calls < 0 || time_out <= 0)
+	if (frame_length < 1 || frame_length > MAX_SIZE - 20 || max_alarm_calls < 0 || time_out <= 0) {
 		printf("At least one value is invalid.\n");
+		exit(-1);
+	}
 
 	/*
 	  Open serial port device for reading and writing and not as controlling tty

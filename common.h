@@ -15,8 +15,6 @@
 #define TRUE 1
 #define TRANSMITTER 0
 #define RECEIVER 1
-#define SET_AND_UA_SIZE 5
-#define DISC_AND_UA_SIZE 5
 #define F 0x7e
 #define A 0x03
 #define C_SET 0x03

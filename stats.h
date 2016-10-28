@@ -18,9 +18,7 @@ typedef struct {
 	int receivedREJ;
 } Statistics;
 
-Statistics stats;
-
-void printStatistics() {
+void printStatistics(Statistics stats) {
 	printf("\n");
 	printf("=======================\n");
 	printf("=CONNECTION STATISTICS=\n");
@@ -46,6 +44,8 @@ void printStatistics() {
 }
 
 Statistics initStatistics() {
+	Statistics stats;
+
 	stats.sentFrames = 0;
 	stats.receivedFrames = 0;
 

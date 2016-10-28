@@ -5,7 +5,7 @@
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
 unsigned char data[MAX_SIZE], max_alarm_calls = 3, time_out = TIME_OUT;
-int stateRead = START, readNumB = 0, parityRead = 0xff;
+Statistics stats;
 
 void alarmOn() {
 	alarm_on = TRUE;
@@ -24,16 +24,14 @@ void answer_alarm()
 		alarm_calls++;
 		write(write_fd, data, data_size);
 		stats.sentBytes += data_size;
+		stats.sentFrames++;
 		printf("Resend %d of the data.\n", alarm_calls);
-		stateRead = START;
-		readNumB = 0;
-		parityRead = 0xff;
-		if (alarm_calls < max_alarm_calls)	// to resend the data 3 times
+		if (alarm_calls < max_alarm_calls)	// to resend the data 'max_alarm_calls' times
 			alarm(time_out);
 		else {
 			alarm_on = FALSE;
 			printf("All attempts to resend the data failed.\n");
-			exit(1);
+			exit(-1);
 		}
 	}
 }
@@ -42,24 +40,15 @@ void sendREJ(int fd, int position) {
 	// Supervision frame in case of failure
 	stats.sentREJ++;
 	tcflush(fd, TCIOFLUSH);
-	stateRead = START;
-	readNumB = 0;
-	parityRead = 0xff;
-	unsigned char dataREJ[5];
-	//printf("sendREJ chamada\n");
-	dataREJ[0] = F;
-	dataREJ[1] = A;
-	dataREJ[2] = C_REJ(position);
-	dataREJ[3] = dataREJ[1] ^ dataREJ[2];
-	dataREJ[4] = F;
-	int dataREJ_size = 5;
-	write(fd, dataREJ, dataREJ_size);
-	stats.sentBytes += dataREJ_size;
-
+	write(fd, data, data_size);
+	stats.sentBytes += data_size;
+	stats.sentFrames++;
 }
 
 int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 {
+	printf("Opening connection.\n");
+
 	unsigned char SET_char;
 	int state = START;
 	while (state != STOP_SM) {
@@ -107,73 +96,90 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	data[2] = C_UA;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
-	data_size = SET_AND_UA_SIZE;
+	data_size = 5;
 	int tr = write(porta, data, data_size);
 	stats.sentBytes += data_size;
+	stats.receivedFrames++;
+	printf("Connection opened.\n");
 	return (tr == data_size) ? 0 : -1;
 }
 
 volatile int pos = 0;
 
-int llread(int fd, unsigned char * buffer)
+int llread(int fd, unsigned char *buffer)
 {
 	write_fd = fd;
 
-	//printf("Data layer reading 'information frame' from the serial conexion.\n");
-	stateRead = START;
-	readNumB = 0;
-	parityRead = 0xff;
-	unsigned char ch, antCh, auxAntChar;
+	int state = START;
+	int readBytes;
+	int parity;
+	unsigned char ch, antCh;
 
-	while (stateRead != STOP_SM) {
+	// Supervision frame in case of insuccess (sent by 'answer_alarm' or 'sendREJ')
+	data[0] = F;
+	data[1] = A;
+	data[2] = C_REJ(pos);
+	data[3] = data[1] ^ data[2];
+	data[4] = F;
+	data_size = 5;
+
+	alarmOn();
+	while (state != STOP_SM) {
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
 		stats.receivedBytes++;
 
-		if ((rand() % 10000) == 1) {	// generate random error
-			ch = ch ^ 0xb5; printf("Gerou erro.\n");
+		if ((rand() % 1000) == 1) {	// generate random error
+			ch = ch ^ 0xb5;
+			printf("Pseudo-random information byte error generated.\n");
 		}
-		switch (stateRead) {
+		/*if ((rand() % 1000) == 20) {	// generate random error
+			printf("Pseudo-random information byte loss generated.\n");
+			continue;
+		}*/
+		switch (state) {
 		case START:
+			readBytes = 0;
+			parity = 0xff;
 			if (ch == F)
-				stateRead = FLAG_RCV;
+				state = FLAG_RCV;
 			else {
 				sendREJ(fd, pos);
-				stateRead = START;
+				//state = START;
 			}
 			break;
 		case FLAG_RCV:
 			if (ch == A)
-				stateRead = A_RCV;
+				state = A_RCV;
 			else {
 				sendREJ(fd, pos);
-				stateRead = START;
+				state = START;
 			}
 			break;
 		case A_RCV:
 			if (ch == C_SEND(pos))
-				stateRead = C_RCV;
+				state = C_RCV;
 			else {
 				sendREJ(fd, pos);
-				stateRead = START;
+				state = START;
 			}
 			break;
 		case C_RCV:
 			if (ch == (A ^ C_SEND(pos)))	// BCC1
-				stateRead = RCV_DATA;
+				state = RCV_DATA;
 			else {
 				sendREJ(fd, pos);
-				stateRead = START;
+				state = START;
 			}
 			break;
 		case RCV_DATA:
-			if (ch == parityRead) {	// BCC2
-				stateRead = BCC2_RCV;
+			if (ch == parity) {	// BCC2
+				state = BCC2_RCV;
 				antCh = ch;
 			}
 			else if (ch == F) {
 				sendREJ(fd, pos);
-				stateRead = START;
+				state = START;
 			}
 			else {
 				if (ch == ESC) {
@@ -181,40 +187,39 @@ int llread(int fd, unsigned char * buffer)
 						printf("A problem occurred reading on 'llread'.\n");
 					if (ch == F) {
 						sendREJ(fd, pos);
-						stateRead = START;
+						state = START;
 						break;
 					}
 					stats.receivedBytes++;
 					ch = ch ^ 0x20;
 				}
-				buffer[readNumB] = ch;
-				parityRead = (parityRead ^ buffer[readNumB]);
-				readNumB++;
+				buffer[readBytes] = ch;
+				parity = (parity ^ buffer[readBytes]);
+				readBytes++;
 			}
 			break;
 		case BCC2_RCV:
 			if (ch == F) {
-				stateRead = STOP_SM;
+				state = STOP_SM;
 			}
 			else {
 				if (antCh == ESC) { //tratar do byte anterior se for um esc
 					ch = ch ^ 0x20;
-					buffer[readNumB] = ch;
-					parityRead = (parityRead ^ buffer[readNumB]);
-					readNumB++;
-					stateRead = RCV_DATA;
+					buffer[readBytes] = ch;
+					parity = (parity ^ buffer[readBytes]);
+					readBytes++;
+					state = RCV_DATA;
 					break;
 				}
 				else { // se o anterior se for data normal
-					auxAntChar = antCh;
-					buffer[readNumB] = auxAntChar;
-					parityRead = (parityRead ^ buffer[readNumB]);
-					readNumB++;
+					buffer[readBytes] = antCh;
+					parity = (parity ^ buffer[readBytes]);
+					readBytes++;
 				}
 
 
-				if (ch == parityRead) {// trata deste byte (pode ser paridade ou data)
-					stateRead = BCC2_RCV;
+				if (ch == parity) {// trata deste byte (pode ser paridade ou data)
+					state = BCC2_RCV;
 					antCh = ch;
 				}
 				else {
@@ -223,23 +228,23 @@ int llread(int fd, unsigned char * buffer)
 							printf("A problem occurred reading on 'llread'.\n");
 						if (ch == F) {
 							sendREJ(fd, pos);
-							stateRead = START;
+							state = START;
 							break;
 						}
 						stats.receivedBytes++;
 						ch = ch ^ 0x20;
 					}
-					buffer[readNumB] = ch;
-					parityRead = (parityRead ^ buffer[readNumB]);
-					readNumB++;
-					stateRead = RCV_DATA;
+					buffer[readBytes] = ch;
+					parity = (parity ^ buffer[readBytes]);
+					readBytes++;
+					state = RCV_DATA;
 				}
 			}
 			break;
 		}
 	}
+	alarmOff();
 	stats.receivedFrames++;
-
 
 	pos = (pos + 1) % 2;
 
@@ -250,15 +255,23 @@ int llread(int fd, unsigned char * buffer)
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
 	data_size = 5;
+	/*if ((rand() % 1000) == 300) {	// generate random error
+		printf("Pseudo-random RR frame loss generated.\n");
+	}
+	else {*/
 	write(write_fd, data, data_size);
 	stats.sentRR++;
 	stats.sentBytes += data_size;
-	return readNumB;
+	stats.sentFrames++;
+	//}
+
+	return readBytes;
 }
 
 int llclose(int porta) {
-	printf("A terminar ligacao\n");
-	int write_fd = porta;
+	printf("Closing connection.\n");
+	write_fd = porta;
+
 	unsigned char DISC_char;
 	int state = START;
 	while (state != STOP_SM) {
@@ -306,13 +319,14 @@ int llclose(int porta) {
 	data[2] = C_DISC;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
-	data_size = DISC_AND_UA_SIZE;
+	data_size = 5;
 	int tr_DISC = write(porta, data, data_size);
 	stats.sentBytes += data_size;
+	stats.sentFrames++;
 
-	alarmOn();
 	unsigned char UA_char;
 	state = START;
+	alarmOn();
 	while (state != STOP_SM) {
 		if (read(write_fd, &UA_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'UA_char' on 'llclose'.\n");
@@ -351,23 +365,25 @@ int llclose(int porta) {
 			break;
 		}
 	}
-	stats.receivedFrames++;
 	alarmOff();
-	printf("Ligacao terminada\n");
-	return (tr_DISC == DISC_AND_UA_SIZE) ? 0 : -1;
+	stats.receivedFrames++;
+	printf("Connection closed.\n");
+	return (tr_DISC == data_size) ? 0 : -1;
 }
 
 
 int receiveFromSerial(int fd) {
 	if (llopen(fd) == -1)
 		printf("Error occurred executing 'llopen'.\n");
-	initStatistics();
+
+	stats = initStatistics();
+
 	unsigned char appControlPacket[MAX_SIZE];
 	int sizeAppCtlPkt = llread(fd, appControlPacket);
 	int sizeOfFile = 0;
 	char nameOfFile[250];
 	if (appControlPacket[0] != C_START) {
-		printf("Erro receiving the Control packet of the aplication.\n");
+		printf("Error receiving the control packet of the aplication.\n");
 		return -1;
 	}
 
@@ -399,14 +415,14 @@ int receiveFromSerial(int fd) {
 			i++;
 			break;
 		default:
-			printf("Erro receiving os the control fields.\n");
+			printf("Error receiving the control fields.\n");
 			break;
 		}
 	}
 
 	int dataFd = open(nameOfFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 	if (dataFd == -1) {
-		printf("Unable to create data file.\n");
+		printf("Unable to create the data file.\n");
 		llclose(fd);
 		return -1;
 	}
@@ -449,7 +465,7 @@ int receiveFromSerial(int fd) {
 	write(dataFd, readData, sizeOfFile);
 	close(dataFd);
 	llclose(fd);
-	printStatistics();
+	printStatistics(stats);
 	return 0;
 }
 
@@ -475,8 +491,10 @@ int main(int argc, char** argv)
 	max_alarm_calls = atoi(argv[3]);
 	time_out = atoi(argv[4]);
 
-	if (max_alarm_calls < 0 || time_out <= 0)
+	if (max_alarm_calls < 0 || time_out <= 0) {
 		printf("At least one value is invalid.\n");
+		exit(-1);
+	}
 
 	/*
 	  Open serial port device for reading and writing and not as controlling tty
