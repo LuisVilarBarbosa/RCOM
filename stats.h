@@ -18,9 +18,7 @@ typedef struct {
 	int receivedREJ;
 } Statistics;
 
-Statistics stats;
-
-void printStatistics(){
+void printStatistics() {
 	printf("\n");
 	printf("=======================\n");
 	printf("=CONNECTION STATISTICS=\n");
@@ -45,7 +43,8 @@ void printStatistics(){
 	printf("Received packets: %d\n", stats.receivedPackets);
 }
 
-Statistics initStatistics(){
+Statistics initStatistics() {
+	Statistics stats;
 
 	stats.sentFrames = 0;
 	stats.receivedFrames = 0;
@@ -64,7 +63,6 @@ Statistics initStatistics(){
 	stats.sentBytes = 0;
 	stats.receivedBytes = 0;
 	stats.fileSize = 0;
-
 
 	return stats;
 }

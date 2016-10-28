@@ -107,7 +107,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		data[2] = C_SEND(pos);
 		data[3] = (data[1] ^ data[2]);		// BCC1
 		data_size = 4;
-		
+
 		// Data from the application level
 		int i;
 		for (i = 0; i < length; i++) {
@@ -174,28 +174,28 @@ int llwrite(int fd, unsigned char *buffer, int length)
 					stats.receivedREJ++;
 					tcflush(fd, TCIOFLUSH);
 				}
-				else{
-				 	stateWrite = STOP_SM;
+				else {
+					stateWrite = STOP_SM;
 					repete = TRUE;
 					tcflush(fd, TCIOFLUSH);
-				 }
+				}
 				break;
 			case C_RCV:
 				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos))) {
 					stateWrite = BCC1_RCV;
 				}
 				else {
-				 	stateWrite = STOP_SM;
+					stateWrite = STOP_SM;
 					repete = TRUE;
 					tcflush(fd, TCIOFLUSH);
 				}
 				break;
 			case BCC1_RCV:
-				if (ch == F){
-						stateWrite = STOP_SM;
-					}
-				else{
-				 	stateWrite = STOP_SM;
+				if (ch == F) {
+					stateWrite = STOP_SM;
+				}
+				else {
+					stateWrite = STOP_SM;
 					repete = TRUE;
 					tcflush(fd, TCIOFLUSH);
 				}
@@ -296,7 +296,7 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 	struct stat st;
 	fstat(dataFd, &st);
 	unsigned long fileLength = st.st_size;
- 	stats.fileSize = (int)fileLength;
+	stats.fileSize = (int)fileLength;
 	unsigned char appPacket[MAX_SIZE];
 	int appPacketSize = 0;
 	unsigned char * sizeInPackets = (unsigned char*)&fileLength;

@@ -49,25 +49,25 @@ void showBaudrates()
 void chooseBaudrate(char *str, tcflag_t *baudrate)
 {
 	int val = atoi(str);
-	switch(val) {
-		case 50: *baudrate = B50; break;
-		case 75: *baudrate = B75; break;
-		case 110: *baudrate = B110; break;
-		case 134: *baudrate = B134; break;
-		case 150: *baudrate = B150; break;
-		case 200: *baudrate = B200; break;
-		case 300: *baudrate = B300; break;
-		case 600: *baudrate = B600; break;
-		case 1200: *baudrate = B1200; break;
-		case 1800: *baudrate = B1800; break;
-		case 2400: *baudrate = B2400; break;
-		case 4800: *baudrate = B4800; break;
-		case 9600: *baudrate = B9600; break;
-		case 19200: *baudrate = B19200; break;
-		case 38400: *baudrate = B38400; break;
-		default:
-			printf("Invalid 'BaudRate'.\n");
-			showBaudrates();
-			exit(2);
+	switch (val) {
+	case 50: *baudrate = B50; break;
+	case 75: *baudrate = B75; break;
+	case 110: *baudrate = B110; break;
+	case 134: *baudrate = B134; break;
+	case 150: *baudrate = B150; break;
+	case 200: *baudrate = B200; break;
+	case 300: *baudrate = B300; break;
+	case 600: *baudrate = B600; break;
+	case 1200: *baudrate = B1200; break;
+	case 1800: *baudrate = B1800; break;
+	case 2400: *baudrate = B2400; break;
+	case 4800: *baudrate = B4800; break;
+	case 9600: *baudrate = B9600; break;
+	case 19200: *baudrate = B19200; break;
+	case 38400: *baudrate = B38400; break;
+	default:
+		printf("Invalid 'BaudRate'.\n");
+		showBaudrates();
+		exit(2);
 	}
 }

@@ -38,7 +38,7 @@ void answer_alarm()
 	}
 }
 
-void sendREJ(int fd, int position){
+void sendREJ(int fd, int position) {
 	// Supervision frame in case of failure
 	stats.sentREJ++;
 	tcflush(fd, TCIOFLUSH);
@@ -65,7 +65,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	while (state != STOP_SM) {
 		if (read(porta, &SET_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'SET_char' on 'llopen'.\n");
-			stats.receivedBytes++;
+		stats.receivedBytes++;
 		switch (state) {
 		case START:
 			if (SET_char == F)
@@ -124,64 +124,66 @@ int llread(int fd, unsigned char * buffer)
 	readNumB = 0;
 	parityRead = 0xff;
 	unsigned char ch, antCh, auxAntChar;
-	
+
 	while (stateRead != STOP_SM) {
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
 		stats.receivedBytes++;
-	       
-		if((rand() % 10000) == 1){	// generate random error
-		  ch = ch ^ 0xb5;printf("Gerou erro.\n");}
+
+		if ((rand() % 10000) == 1) {	// generate random error
+			ch = ch ^ 0xb5; printf("Gerou erro.\n");
+		}
 		switch (stateRead) {
 		case START:
 			if (ch == F)
 				stateRead = FLAG_RCV;
-			else{
-				sendREJ(fd, pos);			
+			else {
+				sendREJ(fd, pos);
 				stateRead = START;
 			}
 			break;
 		case FLAG_RCV:
 			if (ch == A)
 				stateRead = A_RCV;
-			else{ 
-				sendREJ(fd, pos);		
+			else {
+				sendREJ(fd, pos);
 				stateRead = START;
 			}
 			break;
 		case A_RCV:
 			if (ch == C_SEND(pos))
 				stateRead = C_RCV;
-			else{
-					sendREJ(fd, pos);
-					stateRead = START;
+			else {
+				sendREJ(fd, pos);
+				stateRead = START;
 			}
 			break;
 		case C_RCV:
 			if (ch == (A ^ C_SEND(pos)))	// BCC1
 				stateRead = RCV_DATA;
-			else{
-				 sendREJ(fd, pos);
-				 stateRead = START;
-				}
+			else {
+				sendREJ(fd, pos);
+				stateRead = START;
+			}
 			break;
 		case RCV_DATA:
 			if (ch == parityRead) {	// BCC2
 				stateRead = BCC2_RCV;
 				antCh = ch;
 			}
-			else if(ch == F){
+			else if (ch == F) {
 				sendREJ(fd, pos);
 				stateRead = START;
-			}else {
+			}
+			else {
 				if (ch == ESC) {
 					if (read(fd, &ch, 1) != 1)
 						printf("A problem occurred reading on 'llread'.\n");
-						if(ch == F){
-								sendREJ(fd, pos);
-								stateRead = START;
-								break;
-							}
+					if (ch == F) {
+						sendREJ(fd, pos);
+						stateRead = START;
+						break;
+					}
 					stats.receivedBytes++;
 					ch = ch ^ 0x20;
 				}
@@ -209,7 +211,7 @@ int llread(int fd, unsigned char * buffer)
 					parityRead = (parityRead ^ buffer[readNumB]);
 					readNumB++;
 				}
-				
+
 
 				if (ch == parityRead) {// trata deste byte (pode ser paridade ou data)
 					stateRead = BCC2_RCV;
@@ -219,11 +221,11 @@ int llread(int fd, unsigned char * buffer)
 					if (ch == ESC) {
 						if (read(fd, &ch, 1) != 1)
 							printf("A problem occurred reading on 'llread'.\n");
-							if(ch == F){
-								sendREJ(fd, pos);
-								stateRead = START;
-								break;
-							}
+						if (ch == F) {
+							sendREJ(fd, pos);
+							stateRead = START;
+							break;
+						}
 						stats.receivedBytes++;
 						ch = ch ^ 0x20;
 					}
@@ -307,7 +309,7 @@ int llclose(int porta) {
 	data_size = DISC_AND_UA_SIZE;
 	int tr_DISC = write(porta, data, data_size);
 	stats.sentBytes += data_size;
-	
+
 	alarmOn();
 	unsigned char UA_char;
 	state = START;
@@ -356,32 +358,32 @@ int llclose(int porta) {
 }
 
 
-int receiveFromSerial(int fd){
-  	if (llopen(fd) == -1)
-	  printf("Error occurred executing 'llopen'.\n");
+int receiveFromSerial(int fd) {
+	if (llopen(fd) == -1)
+		printf("Error occurred executing 'llopen'.\n");
 	initStatistics();
 	unsigned char appControlPacket[MAX_SIZE];
 	int sizeAppCtlPkt = llread(fd, appControlPacket);
 	int sizeOfFile = 0;
 	char nameOfFile[250];
-	if(appControlPacket[0] != C_START){
+	if (appControlPacket[0] != C_START) {
 		printf("Erro receiving the Control packet of the aplication.\n");
 		return -1;
 	}
-	
+
 	int i = 1;
 	int k;
 	int numLength;
 	int initialN;
-	while(i < sizeAppCtlPkt){
-	switch (appControlPacket[i]) {
+	while (i < sizeAppCtlPkt) {
+		switch (appControlPacket[i]) {
 		case FILE_SIZE_INDICATOR:
 			i++;
 			sizeOfFile = 0;
 			numLength = appControlPacket[i];
 			initialN = i;
-			for(k = 1; k <= numLength; k++){
-				sizeOfFile += ((appControlPacket[initialN + k]) << ((k-1)*8));
+			for (k = 1; k <= numLength; k++) {
+				sizeOfFile += ((appControlPacket[initialN + k]) << ((k - 1) * 8));
 				i++;
 			}
 			i++;
@@ -390,8 +392,8 @@ int receiveFromSerial(int fd){
 			i++;
 			numLength = appControlPacket[i];
 			initialN = i;
-			for(k = 1; k <= numLength; k++){
-				nameOfFile[k-1] += appControlPacket[initialN + k];
+			for (k = 1; k <= numLength; k++) {
+				nameOfFile[k - 1] += appControlPacket[initialN + k];
 				i++;
 			}
 			i++;
@@ -403,11 +405,11 @@ int receiveFromSerial(int fd){
 	}
 
 	int dataFd = open(nameOfFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-  if(dataFd == -1){
-    printf("Unable to create data file.\n");
-    llclose(fd);
-    return -1;
-  }
+	if (dataFd == -1) {
+		printf("Unable to create data file.\n");
+		llclose(fd);
+		return -1;
+	}
 	stats.receivedPackets++;
 	stats.fileSize = sizeOfFile;
 	unsigned char fileData[MAX_SIZE];
@@ -418,32 +420,32 @@ int receiveFromSerial(int fd){
 	unsigned char sequenceNum = 0;
 	unsigned long nunOcte;
 
-	while (i < sizeOfFile){
+	while (i < sizeOfFile) {
 		llread(fd, fileData);
 		stats.receivedPackets++;
-		
-		if(fileData[0] != 1){
+
+		if (fileData[0] != 1) {
 			printf("Erro receiving data packets: control field wrong.\n");
 			return -1;
 		}
-			
-		if(fileData[1] != sequenceNum){
+
+		if (fileData[1] != sequenceNum) {
 			printf("Erro receiving data packets: sequence number wrong.\n");
 			return -1;
 		}
-		
-		nunOcte = fileData[2]*256 + fileData[3];
+
+		nunOcte = fileData[2] * 256 + fileData[3];
 		j = 0;
-		while(j < nunOcte){
-			readData[i+j] = fileData[j+4];
+		while (j < nunOcte) {
+			readData[i + j] = fileData[j + 4];
 			j++;
 		}
-		
+
 		i += nunOcte;
 		sequenceNum++;
 		printf("bytes received: %d\n", i);
 	}
-	
+
 	write(dataFd, readData, sizeOfFile);
 	close(dataFd);
 	llclose(fd);
