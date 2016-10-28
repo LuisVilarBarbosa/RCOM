@@ -385,7 +385,7 @@ int main(int argc, char** argv)
 	*/
 
 	fd = open(serial_port, O_RDWR | O_NOCTTY);
-	if (fd < 0) { perror(filename); exit(-1); }
+	if (fd < 0) { perror(serial_port); exit(-1); }
 
 	if (tcgetattr(fd, &oldtio) == -1) { /* save current port settings */
 		perror("tcgetattr");
