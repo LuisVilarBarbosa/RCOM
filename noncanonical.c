@@ -39,6 +39,7 @@ void answer_alarm()
 void sendREJ(int fd, int position) {
 	// Supervision frame in case of failure
 	stats.sentREJ++;
+	sleep(1);
 	tcflush(fd, TCIOFLUSH);
 	write(fd, data, data_size);
 	stats.sentBytes += data_size;
@@ -129,14 +130,17 @@ int llread(int fd, unsigned char *buffer)
 			printf("A problem occurred reading on 'llread'.\n");
 		stats.receivedBytes++;
 
+
 		if ((rand() % 1000) == 1) {	// generate random error
-			ch = ch ^ 0xb5;
-			printf("Pseudo-random information byte error generated.\n");
-		}
-		/*if ((rand() % 1000) == 20) {	// generate random error
 			printf("Pseudo-random information byte loss generated.\n");
 			continue;
-		}*/
+		}
+
+		if ((rand() % 1000) == 20) {	// generate random error
+			ch = ch ^ (rand() % 32);
+			printf("Pseudo-random information byte error generated.\n");
+		}
+
 		switch (state) {
 		case START:
 			readBytes = 0;
@@ -259,10 +263,10 @@ int llread(int fd, unsigned char *buffer)
 		printf("Pseudo-random RR frame loss generated.\n");
 	}
 	else {*/
-	write(write_fd, data, data_size);
-	stats.sentRR++;
-	stats.sentBytes += data_size;
-	stats.sentFrames++;
+		write(write_fd, data, data_size);
+		stats.sentRR++;
+		stats.sentBytes += data_size;
+		stats.sentFrames++;
 	//}
 
 	return readBytes;

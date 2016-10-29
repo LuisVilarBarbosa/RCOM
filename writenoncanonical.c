@@ -1,4 +1,4 @@
-﻿/*Non-Canonical Input Processing*/
+/*Non-Canonical Input Processing*/
 
 #include "common.h"
 
@@ -174,6 +174,10 @@ int llwrite(int fd, unsigned char *buffer, int length)
 					repeat = TRUE;
 					stats.receivedREJ++;
 				}
+				else if (ch == C_REJ((pos + 1) % 2)) {
+					printf("Position jumped - pos: %02d\n", pos);
+					return -1;
+				}
 				else {
 					state = STOP_SM;
 					repeat = TRUE;
@@ -197,8 +201,10 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				break;
 			}
 
-			if (repeat == TRUE)
+			if (repeat == TRUE) {
+				sleep(1);
 				tcflush(fd, TCIOFLUSH);
+			}
 		}
 		alarmOff();
 	}
