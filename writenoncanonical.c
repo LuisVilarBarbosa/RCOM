@@ -3,7 +3,7 @@
 #include "common.h"
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
-int max_alarm_calls = 3, time_out = TIME_OUT;
+int max_alarm_calls = MAX_ALARM_CALLS, time_out = TIME_OUT;
 unsigned char data[MAX_SIZE];
 Statistics stats;
 
@@ -36,7 +36,7 @@ void answer_alarm()
 	}
 }
 
-int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
+int llopen(int porta)
 {
 	printf("Opening connection.\n");
 	write_fd = porta;
@@ -95,7 +95,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	alarmOff();
 	stats.receivedFrames++;
 	printf("Connection opened.\n");
-	return (tr == data_size) ? 0 : -1;
+	return (tr == data_size) ? porta : -1;
 }
 
 volatile int pos = 0;	// can be 0 or 1, it is used by llwrite
@@ -135,8 +135,17 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		}
 
 		// Trailer;
-		data[data_size] = parity; // BCC2
-		data_size++;
+		if (parity == ESC || parity == F) { // BCC2
+			data[data_size] = ESC;
+			data_size++;
+			unsigned char flag = parity ^ 0x20;
+			data[data_size] = flag;
+			data_size++;
+		}
+		else {
+			data[data_size] = parity;
+			data_size++;
+		}
 		data[data_size] = F;
 		data_size++;
 		write(write_fd, data, data_size);
@@ -209,7 +218,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		alarmOff();
 	}
 	pos = (pos + 1) % 2;
-	return 0;
+	return length;
 }
 
 int llclose(int porta) {
@@ -329,7 +338,8 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 		appPacketSize++;
 	}
 
-	llwrite(fd, appPacket, appPacketSize);
+	if (llwrite(fd, appPacket, appPacketSize) != appPacketSize)
+		printf("Error occurred executing 'llwrite'.\n");
 	stats.sentPackets++;
 
 
@@ -348,14 +358,16 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 		for (j = 0; j < size_read; j++)
 			fileToSend[j + 4] = fileData[j];
 
-		llwrite(fd, fileToSend, size_read + 4);
+		if (llwrite(fd, fileToSend, size_read + 4) != size_read + 4)
+			printf("Error occurred executing 'llwrite'.\n");
 		stats.sentPackets++;
 		i += size_read;
-		sequenceNum++;
-		printf("bytes enviados: %d\n", i);
+		sequenceNum = (sequenceNum + 1) % 255;
+		printf("Bytes enviados: %d.\n", i);
 	}
 	close(dataFd);
-	llclose(fd);
+	if (llclose(fd) != 0)
+		printf("Error occurred executing 'llclose'.\n");
 	printStatistics(stats);
 	return 0;
 }

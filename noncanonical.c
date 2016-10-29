@@ -4,7 +4,7 @@
 #include "common.h"
 
 volatile int alarm_on = FALSE, alarm_calls = 0, write_fd, data_size = 0;
-unsigned char data[MAX_SIZE], max_alarm_calls = 3, time_out = TIME_OUT;
+unsigned char data[MAX_SIZE], max_alarm_calls = MAX_ALARM_CALLS, time_out = TIME_OUT;
 Statistics stats;
 
 void alarmOn() {
@@ -52,7 +52,7 @@ void sendREJ(int fd, int position) {
 	stats.sentFrames++;
 }
 
-int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
+int llopen(int porta)
 {
 	printf("Opening connection.\n");
 
@@ -108,7 +108,7 @@ int llopen(int porta /*, TRANSMITTER | RECEIVER*/)
 	stats.sentBytes += data_size;
 	stats.receivedFrames++;
 	printf("Connection opened.\n");
-	return (tr == data_size) ? 0 : -1;
+	return (tr == data_size) ? porta : -1;
 }
 
 volatile int pos = 0;
@@ -118,23 +118,16 @@ int llread(int fd, unsigned char *buffer)
 	write_fd = fd;
 
 	int state = START;
-	int readBytes;
-	int parity;
-	unsigned char ch, antCh;
+	unsigned short readBytes = 0;
+	int parity = 0xff;
+	unsigned char ch;
 
-	alarmOn();
 	while (state != STOP_SM) {
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
 		stats.receivedBytes++;
 
-
 		if ((rand() % 1000) == 1) {	// generate random error
-			printf("Pseudo-random information byte loss generated.\n");
-			continue;
-		}
-
-		if ((rand() % 1000) == 20) {	// generate random error
 			ch = ch ^ (rand() % 32);
 			printf("Pseudo-random information byte error generated.\n");
 		}
@@ -175,13 +168,16 @@ int llread(int fd, unsigned char *buffer)
 			}
 			break;
 		case RCV_DATA:
-			if (ch == parity) {	// BCC2
-				state = BCC2_RCV;
-				antCh = ch;
-			}
-			else if (ch == F) {
-				sendREJ(fd, pos);
-				state = START;
+			if (ch == F) {
+				int antParity = (parity ^ buffer[readBytes - 1]);
+				if (buffer[readBytes - 1] == antParity) {
+					state = STOP_SM;
+					readBytes--;
+				}
+				else {
+					sendREJ(fd, pos);
+					state = START;
+				}
 			}
 			else {
 				if (ch == ESC) {
@@ -200,52 +196,8 @@ int llread(int fd, unsigned char *buffer)
 				readBytes++;
 			}
 			break;
-		case BCC2_RCV:
-			if (ch == F) {
-				state = STOP_SM;
-			}
-			else {
-				if (antCh == ESC) { //tratar do byte anterior se for um esc
-					ch = ch ^ 0x20;
-					buffer[readBytes] = ch;
-					parity = (parity ^ buffer[readBytes]);
-					readBytes++;
-					state = RCV_DATA;
-					break;
-				}
-				else { // se o anterior se for data normal
-					buffer[readBytes] = antCh;
-					parity = (parity ^ buffer[readBytes]);
-					readBytes++;
-				}
-
-
-				if (ch == parity) {// trata deste byte (pode ser paridade ou data)
-					state = BCC2_RCV;
-					antCh = ch;
-				}
-				else {
-					if (ch == ESC) {
-						if (read(fd, &ch, 1) != 1)
-							printf("A problem occurred reading on 'llread'.\n");
-						if (ch == F) {
-							sendREJ(fd, pos);
-							state = START;
-							break;
-						}
-						stats.receivedBytes++;
-						ch = ch ^ 0x20;
-					}
-					buffer[readBytes] = ch;
-					parity = (parity ^ buffer[readBytes]);
-					readBytes++;
-					state = RCV_DATA;
-				}
-			}
-			break;
 		}
 	}
-	alarmOff();
 	stats.receivedFrames++;
 
 	pos = (pos + 1) % 2;
@@ -257,15 +209,10 @@ int llread(int fd, unsigned char *buffer)
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
 	data_size = 5;
-	/*if ((rand() % 1000) == 300) {	// generate random error
-		printf("Pseudo-random RR frame loss generated.\n");
-	}
-	else {*/
-		write(write_fd, data, data_size);
-		stats.sentRR++;
-		stats.sentBytes += data_size;
-		stats.sentFrames++;
-	//}
+	write(write_fd, data, data_size);
+	stats.sentRR++;
+	stats.sentBytes += data_size;
+	stats.sentFrames++;
 
 	return readBytes;
 }
@@ -381,7 +328,7 @@ int receiveFromSerial(int fd) {
 	stats = initStatistics();
 
 	unsigned char appControlPacket[MAX_SIZE];
-	int sizeAppCtlPkt = llread(fd, appControlPacket);
+	unsigned short sizeAppCtlPkt = llread(fd, appControlPacket);
 	int sizeOfFile = 0;
 	char nameOfFile[250];
 	if (appControlPacket[0] != C_START) {
@@ -425,7 +372,8 @@ int receiveFromSerial(int fd) {
 	int dataFd = open(nameOfFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 	if (dataFd == -1) {
 		printf("Unable to create the data file.\n");
-		llclose(fd);
+		if (llclose(fd) != 0)
+			printf("Error occurred executing 'llclose'.\n");
 		return -1;
 	}
 	stats.receivedPackets++;
@@ -436,10 +384,10 @@ int receiveFromSerial(int fd) {
 	i = 0;
 	int j;
 	unsigned char sequenceNum = 0;
-	unsigned long nunOcte;
+	unsigned short nunOcte;
 
 	while (i < sizeOfFile) {
-		llread(fd, fileData);
+		unsigned short receivedBytes = llread(fd, fileData);
 		stats.receivedPackets++;
 
 		if (fileData[0] != 1) {
@@ -453,6 +401,10 @@ int receiveFromSerial(int fd) {
 		}
 
 		nunOcte = fileData[2] * 256 + fileData[3];
+		if (nunOcte != receivedBytes - 4) {
+			printf("Expected %d bytes, received %d.\n", nunOcte, receivedBytes - 4);
+			return -1;
+		}
 		j = 0;
 		while (j < nunOcte) {
 			readData[i + j] = fileData[j + 4];
@@ -460,13 +412,14 @@ int receiveFromSerial(int fd) {
 		}
 
 		i += nunOcte;
-		sequenceNum++;
+		sequenceNum = (sequenceNum + 1) % 255;
 		printf("bytes received: %d\n", i);
 	}
 
 	write(dataFd, readData, sizeOfFile);
 	close(dataFd);
-	llclose(fd);
+	if (llclose(fd) != 0)
+		printf("Error occurred executing 'llclose'.\n");
 	printStatistics(stats);
 	return 0;
 }
