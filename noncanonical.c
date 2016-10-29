@@ -378,7 +378,7 @@ int receiveFromSerial(int fd) {
 		unsigned short receivedBytes = llread(fd, fileData);
 		stats.receivedPackets++;
 
-		if (fileData[0] != 1) {
+		if (fileData[0] != C_DATA) {
 			printf("Erro receiving data packets: control field wrong.\n");
 			return -1;
 		}

@@ -217,6 +217,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		}
 		alarmOff();
 	}
+	stats.receivedFrames++;
 	pos = (pos + 1) % 2;
 	return length;
 }
@@ -277,6 +278,7 @@ int llclose(int porta) {
 		}
 	}
 	alarmOff();
+	stats.receivedFrames++;
 
 	data[0] = F;
 	data[1] = A;
@@ -351,7 +353,7 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 	unsigned long size_read = 0;
 	unsigned char sequenceNum = 0;
 	while ((size_read = read(dataFd, fileData, frame_length))) {
-		fileToSend[0] = 1;
+		fileToSend[0] = C_DATA;
 		fileToSend[1] = sequenceNum;
 		fileToSend[2] = (unsigned char)(size_read / 256);
 		fileToSend[3] = (unsigned char)(size_read % 256);
@@ -365,6 +367,11 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 		sequenceNum = (sequenceNum + 1) % 255;
 		printf("Bytes enviados: %d.\n", i);
 	}
+
+	// end packet (similar to start packet)
+	/*appPacket[0] = C_END;
+	llwrite(fd, appPacket, appPacketSize);*/
+
 	close(dataFd);
 	if (llclose(fd) != 0)
 		printf("Error occurred executing 'llclose'.\n");

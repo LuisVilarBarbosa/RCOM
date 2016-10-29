@@ -23,7 +23,9 @@
 #define C_SEND(S) (S << 6)
 #define C_RR(R) ((R << 7) | 0x05)
 #define C_REJ(R) ((R << 7) | 0x01)
+#define C_DATA 1
 #define C_START 2
+#define C_END 3
 #define START 0
 #define FLAG_RCV 1
 #define A_RCV 2
