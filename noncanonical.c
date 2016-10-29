@@ -413,7 +413,7 @@ int receiveFromSerial(int fd) {
 
 		i += nunOcte;
 		sequenceNum = (sequenceNum + 1) % 255;
-		printf("bytes received: %d\n", i);
+		printf("Bytes received: %d.\n", i);
 	}
 
 	write(dataFd, readData, sizeOfFile);
