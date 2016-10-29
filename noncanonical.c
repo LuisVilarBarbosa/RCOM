@@ -52,14 +52,14 @@ void sendREJ(int fd, int position) {
 	stats.sentFrames++;
 }
 
-int llopen(int porta)
+int llopen(int port)
 {
 	printf("Opening connection.\n");
 
 	unsigned char SET_char;
 	int state = START;
 	while (state != STOP_SM) {
-		if (read(porta, &SET_char, 1) != 1)    /* returns after 1 chars have been input */
+		if (read(port, &SET_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'SET_char' on 'llopen'.\n");
 		stats.receivedBytes++;
 		switch (state) {
@@ -104,11 +104,11 @@ int llopen(int porta)
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
 	data_size = 5;
-	int tr = write(porta, data, data_size);
+	int tr = write(port, data, data_size);
 	stats.sentBytes += data_size;
 	stats.receivedFrames++;
 	printf("Connection opened.\n");
-	return (tr == data_size) ? porta : -1;
+	return (tr == data_size) ? port : -1;
 }
 
 volatile int pos = 0;
@@ -205,14 +205,14 @@ int llread(int fd, unsigned char *buffer)
 	return readBytes;
 }
 
-int llclose(int porta) {
+int llclose(int port) {
 	printf("Closing connection.\n");
-	write_fd = porta;
+	write_fd = port;
 
 	unsigned char DISC_char;
 	int state = START;
 	while (state != STOP_SM) {
-		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
+		if (read(port, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
 		stats.receivedBytes++;
 		switch (state) {
@@ -257,7 +257,7 @@ int llclose(int porta) {
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
 	data_size = 5;
-	int tr_DISC = write(porta, data, data_size);
+	int tr_DISC = write(write_fd, data, data_size);
 	stats.sentBytes += data_size;
 	stats.sentFrames++;
 
@@ -318,7 +318,7 @@ int receiveFromSerial(int fd) {
 	unsigned char appControlPacket[MAX_SIZE];
 	unsigned short sizeAppCtlPkt = llread(fd, appControlPacket);
 	int sizeOfFile = 0;
-	char nameOfFile[250];
+	char nameOfFile[256];
 	if (appControlPacket[0] != C_START) {
 		printf("Error receiving the control packet of the aplication.\n");
 		return -1;
@@ -366,8 +366,8 @@ int receiveFromSerial(int fd) {
 	}
 	stats.receivedPackets++;
 	stats.fileSize = sizeOfFile;
-	unsigned char fileData[MAX_SIZE];
-	unsigned char readData[MAX_SIZE];
+	unsigned char fileData[MAX_DATA_SIZE];
+	unsigned char readData[MAX_DATA_SIZE];
 
 	i = 0;
 	int j;
@@ -425,7 +425,7 @@ int main(int argc, char** argv)
 		(strcmp("/dev/ttyS1", argv[1]) != 0))) {
 		printf("Usage:\tnserial SerialPort BaudRate AlarmCalls TimeOut\n\tex: nserial /dev/ttyS1 38400 3 3\n");
 		showBaudrates();
-		exit(1);
+		exit(-1);
 	}
 
 	char *serial_port = argv[1];

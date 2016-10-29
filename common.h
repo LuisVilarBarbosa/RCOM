@@ -38,7 +38,8 @@
 #define TIME_OUT 3
 #define MAX_ALARM_CALLS 3
 #define ESC 0x7d
-#define MAX_SIZE 65535	/* 2^(16 bits) - 1 --> application data field 'length' has 2 bytes */
+#define MAX_DATA_SIZE 65535	/* 2^(16 bits) - 1 --> application data field 'length' has 2 bytes */
+#define MAX_SIZE 1048576 /* 1MB */
 #define FILE_SIZE_INDICATOR 0
 #define FILE_NAME_INDICATOR 1
 
@@ -69,6 +70,6 @@ void chooseBaudrate(char *str, tcflag_t *baudrate)
 	default:
 		printf("Invalid 'BaudRate'.\n");
 		showBaudrates();
-		exit(2);
+		exit(-2);
 	}
 }

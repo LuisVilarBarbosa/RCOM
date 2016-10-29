@@ -7,7 +7,7 @@ typedef struct {
 
 	int sentBytes;
 	int receivedBytes;
-	int fileSize;
+	unsigned long fileSize;
 
 	int timeouts;
 
@@ -37,7 +37,7 @@ void printStatistics(Statistics stats) {
 	printf("\n");
 	printf("Received bytes:   %d\n", stats.receivedBytes);
 	printf("Sent bytes:      %d\n", stats.sentBytes);
-	printf("FileSize:         %d bytes\n", stats.fileSize);
+	printf("FileSize:         %lu bytes\n", stats.fileSize);
 	printf("\n");
 	printf("Sent packets:     %d\n", stats.sentPackets);
 	printf("Received packets: %d\n", stats.receivedPackets);

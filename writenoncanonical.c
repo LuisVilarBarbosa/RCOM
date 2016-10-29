@@ -36,10 +36,10 @@ void answer_alarm()
 	}
 }
 
-int llopen(int porta)
+int llopen(int port)
 {
 	printf("Opening connection.\n");
-	write_fd = porta;
+	write_fd = port;
 
 	data[0] = F;
 	data[1] = A;
@@ -55,7 +55,7 @@ int llopen(int porta)
 	int state = START;
 	alarmOn();
 	while (state != STOP_SM) {
-		if (read(porta, &UA_char, 1) != 1)    /* returns after 1 chars have been input */
+		if (read(port, &UA_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'UA_char' on 'llopen'.\n");
 		stats.receivedBytes++;
 		switch (state) {
@@ -95,7 +95,7 @@ int llopen(int porta)
 	alarmOff();
 	stats.receivedFrames++;
 	printf("Connection opened.\n");
-	return (tr == data_size) ? porta : -1;
+	return (tr == data_size) ? port : -1;
 }
 
 volatile int pos = 0;	// can be 0 or 1, it is used by llwrite
@@ -185,7 +185,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				}
 				else if (ch == C_REJ((pos + 1) % 2)) {
 					printf("Position jumped - pos: %02d\n", pos);
-					return -1;
+					exit(-1);
 				}
 				else {
 					state = STOP_SM;
@@ -211,7 +211,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 			}
 
 			if (repeat == TRUE) {
-				sleep(1);
+				sleep(1);	// wait that all the bytes are written by the receiver
 				tcflush(fd, TCIOFLUSH);
 			}
 		}
@@ -222,9 +222,9 @@ int llwrite(int fd, unsigned char *buffer, int length)
 	return length;
 }
 
-int llclose(int porta) {
+int llclose(int port) {
 	printf("Closing connection.\n");
-	write_fd = porta;
+	write_fd = port;
 
 	data[0] = F;
 	data[1] = A;
@@ -240,7 +240,7 @@ int llclose(int porta) {
 	int state = START;
 	alarmOn();
 	while (state != STOP_SM) {
-		if (read(porta, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
+		if (read(port, &DISC_char, 1) != 1)    /* returns after 1 chars have been input */
 			printf("A problem occurred reading a 'DISC_char' on 'llclose'.\n");
 		stats.receivedBytes++;
 		switch (state) {
@@ -286,35 +286,30 @@ int llclose(int porta) {
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
 	data_size = 5;
-	int tr_UA = write(porta, data, data_size);
+	int tr_UA = write(write_fd, data, data_size);
 	stats.sentFrames++;
 	stats.sentBytes += data_size;
-
 	printf("Connection closed.\n");
-
 	return (tr_DISC == 5 && tr_UA == 5) ? 0 : -1;
 }
 
-int writeToSerial(int fd, char fileName[], int frame_length) {
+int writeToSerial(int fd, char filename[], int frame_length) {
 
-	int dataFd = open(fileName, O_RDONLY);
-
+	int dataFd = open(filename, O_RDONLY);
 	if (dataFd == -1) {
 		printf("Couldn't open the data file.\n");
 		return -1;
 	}
-
 	if (llopen(fd) == -1) {
 		printf("Error occurred executing 'llopen'.\n");
 		return -1;
 	}
-
 	stats = initStatistics();
 
 	struct stat st;
 	fstat(dataFd, &st);
 	unsigned long fileLength = st.st_size;
-	stats.fileSize = (int)fileLength;
+	stats.fileSize = fileLength;
 	unsigned char appPacket[MAX_SIZE];
 	int appPacketSize = 0;
 	unsigned char *sizeInPackets = (unsigned char*)&fileLength;
@@ -333,39 +328,36 @@ int writeToSerial(int fd, char fileName[], int frame_length) {
 
 	appPacket[appPacketSize] = FILE_NAME_INDICATOR;
 	appPacketSize++;
-	appPacket[appPacketSize] = strlen(fileName);
+	unsigned int filenameLength = strlen(filename);
+	appPacket[appPacketSize] = (unsigned char)filenameLength;	// allows names with 256 chars at maximum
 	appPacketSize++;
-	for (i = 0; i < strlen(fileName); i++) {
-		appPacket[appPacketSize] = (unsigned char)fileName[i];
+	for (i = 0; i < filenameLength; i++) {
+		appPacket[appPacketSize] = filename[i];
 		appPacketSize++;
 	}
 
-	if (llwrite(fd, appPacket, appPacketSize) != appPacketSize)
-		printf("Error occurred executing 'llwrite'.\n");
+	llwrite(fd, appPacket, appPacketSize);
 	stats.sentPackets++;
 
-
 	//sending packets
-	unsigned char fileData[MAX_SIZE];
-	unsigned char fileToSend[MAX_SIZE];
-	i = 0;
-	unsigned long j;
+	unsigned char fileData[MAX_DATA_SIZE];
+	unsigned char fileToSend[MAX_DATA_SIZE];
 	unsigned long size_read = 0;
 	unsigned char sequenceNum = 0;
+	unsigned long sentBytes = 0;
 	while ((size_read = read(dataFd, fileData, frame_length))) {
 		fileToSend[0] = C_DATA;
 		fileToSend[1] = sequenceNum;
 		fileToSend[2] = (unsigned char)(size_read / 256);
 		fileToSend[3] = (unsigned char)(size_read % 256);
-		for (j = 0; j < size_read; j++)
-			fileToSend[j + 4] = fileData[j];
+		for (i = 0; i < size_read; i++)
+			fileToSend[i + 4] = fileData[i];
 
-		if (llwrite(fd, fileToSend, size_read + 4) != size_read + 4)
-			printf("Error occurred executing 'llwrite'.\n");
+		llwrite(fd, fileToSend, size_read + 4);
 		stats.sentPackets++;
-		i += size_read;
+		sentBytes += size_read;
 		sequenceNum = (sequenceNum + 1) % 255;
-		printf("Bytes enviados: %d.\n", i);
+		printf("Bytes enviados: %lu.\n", sentBytes);
 	}
 
 	// end packet (similar to start packet)
@@ -391,7 +383,7 @@ int main(int argc, char** argv)
 		(strcmp("/dev/ttyS1", argv[1]) != 0))) {
 		printf("Usage:\tnserial SerialPort Filename BaudRate FrameLength AlarmCalls TimeOut\n\tex: nserial /dev/ttyS1 pinguim.gif 38400 512 3 3\n");
 		showBaudrates();
-		exit(1);
+		exit(-1);
 	}
 
 	char *serial_port = argv[1];
@@ -402,7 +394,7 @@ int main(int argc, char** argv)
 	max_alarm_calls = atoi(argv[5]);
 	time_out = atoi(argv[6]);
 
-	if (frame_length < 1 || frame_length > MAX_SIZE - 20 || max_alarm_calls < 0 || time_out <= 0) {
+	if (frame_length < 1 || frame_length > MAX_DATA_SIZE || max_alarm_calls < 0 || time_out <= 0) {
 		printf("At least one value is invalid.\n");
 		exit(-1);
 	}
