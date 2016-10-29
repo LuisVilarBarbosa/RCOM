@@ -138,34 +138,22 @@ int llread(int fd, unsigned char *buffer)
 			parity = 0xff;
 			if (ch == F)
 				state = FLAG_RCV;
-			else {
-				sendREJ(fd, pos);
-				//state = START;
-			}
+			// else state = START;
 			break;
 		case FLAG_RCV:
 			if (ch == A)
 				state = A_RCV;
-			else {
-				sendREJ(fd, pos);
-				state = START;
-			}
+			else state = START;
 			break;
 		case A_RCV:
 			if (ch == C_SEND(pos))
 				state = C_RCV;
-			else {
-				sendREJ(fd, pos);
-				state = START;
-			}
+			else state = START;
 			break;
 		case C_RCV:
 			if (ch == (A ^ C_SEND(pos)))	// BCC1
 				state = RCV_DATA;
-			else {
-				sendREJ(fd, pos);
-				state = START;
-			}
+			else state = START;
 			break;
 		case RCV_DATA:
 			if (ch == F) {
