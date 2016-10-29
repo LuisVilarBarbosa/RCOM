@@ -41,6 +41,12 @@ void sendREJ(int fd, int position) {
 	stats.sentREJ++;
 	sleep(1);
 	tcflush(fd, TCIOFLUSH);
+	data[0] = F;
+	data[1] = A;
+	data[2] = C_REJ(position);
+	data[3] = data[1] ^ data[2];
+	data[4] = F;
+	data_size = 5;
 	write(fd, data, data_size);
 	stats.sentBytes += data_size;
 	stats.sentFrames++;
@@ -115,14 +121,6 @@ int llread(int fd, unsigned char *buffer)
 	int readBytes;
 	int parity;
 	unsigned char ch, antCh;
-
-	// Supervision frame in case of insuccess (sent by 'answer_alarm' or 'sendREJ')
-	data[0] = F;
-	data[1] = A;
-	data[2] = C_REJ(pos);
-	data[3] = data[1] ^ data[2];
-	data[4] = F;
-	data_size = 5;
 
 	alarmOn();
 	while (state != STOP_SM) {
