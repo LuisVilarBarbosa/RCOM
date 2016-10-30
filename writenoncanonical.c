@@ -42,7 +42,7 @@ int llopen(int port)
 	write_fd = port;
 
 	data[0] = F;
-	data[1] = A;
+	data[1] = A_SENDER_TO_RECEIVER_CMD;
 	data[2] = C_SET;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
@@ -65,7 +65,7 @@ int llopen(int port)
 			//else state = START;
 			break;
 		case FLAG_RCV:
-			if (UA_char == A)
+			if (UA_char == A_RECEIVER_TO_SENDER_ANSWER)
 				state = A_RCV;
 			else if (UA_char == F)
 				state = FLAG_RCV;
@@ -79,7 +79,7 @@ int llopen(int port)
 			else state = START;
 			break;
 		case C_RCV:
-			if (UA_char == (A ^ C_UA))
+			if (UA_char == (A_RECEIVER_TO_SENDER_ANSWER ^ C_UA))
 				state = BCC_OK;
 			else if (UA_char == F)
 				state = FLAG_RCV;
@@ -109,7 +109,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 		repeat = FALSE;
 		// Header
 		data[0] = F;
-		data[1] = A;
+		data[1] = A_SENDER_TO_RECEIVER_CMD;
 		data[2] = C_SEND(pos);
 		data[3] = (data[1] ^ data[2]);		// BCC1
 		data_size = 4;
@@ -166,7 +166,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				//else state = START;
 				break;
 			case FLAG_RCV:
-				if (ch == A)
+				if (ch == A_RECEIVER_TO_SENDER_ANSWER)
 					state = A_RCV;
 				else {
 					state = STOP_SM;
@@ -193,7 +193,8 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				}
 				break;
 			case C_RCV:
-				if (ch == (A ^ C_RR((pos + 1) % 2)) || ch == (A ^ C_REJ(pos)))
+				if (ch == (A_RECEIVER_TO_SENDER_ANSWER ^ C_RR((pos + 1) % 2)) ||
+					ch == (A_RECEIVER_TO_SENDER_ANSWER ^ C_REJ(pos)))
 					state = BCC1_RCV;
 				else {
 					state = STOP_SM;
@@ -227,7 +228,7 @@ int llclose(int port) {
 	write_fd = port;
 
 	data[0] = F;
-	data[1] = A;
+	data[1] = A_SENDER_TO_RECEIVER_CMD;
 	data[2] = C_DISC;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
@@ -250,7 +251,7 @@ int llclose(int port) {
 			//else state = START;
 			break;
 		case FLAG_RCV:
-			if (DISC_char == A)
+			if (DISC_char == A_RECEIVER_TO_SENDER_CMD)
 				state = A_RCV;
 			else if (DISC_char == F)
 				state = FLAG_RCV;
@@ -264,7 +265,7 @@ int llclose(int port) {
 			else state = START;
 			break;
 		case C_RCV:
-			if (DISC_char == (A ^ C_DISC))
+			if (DISC_char == (A_RECEIVER_TO_SENDER_CMD ^ C_DISC))
 				state = BCC_OK;
 			else if (DISC_char == F)
 				state = FLAG_RCV;
@@ -281,7 +282,7 @@ int llclose(int port) {
 	stats.receivedFrames++;
 
 	data[0] = F;
-	data[1] = A;
+	data[1] = A_SENDER_TO_RECEIVER_CMD;
 	data[2] = C_UA;
 	data[3] = data[1] ^ data[2];
 	data[4] = F;

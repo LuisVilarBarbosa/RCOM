@@ -16,7 +16,10 @@
 #define TRANSMITTER 0
 #define RECEIVER 1
 #define F 0x7e
-#define A 0x03
+#define A_SENDER_TO_RECEIVER_CMD 0x03
+#define A_RECEIVER_TO_SENDER_ANSWER 0x03
+#define A_RECEIVER_TO_SENDER_CMD 0x01
+#define A_SENDER_TO_RECEIVER_ANSWER 0x01
 #define C_SET 0x03
 #define C_DISC 0x0b
 #define C_UA 0x07
