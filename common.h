@@ -35,10 +35,11 @@
 #define BCC1_RCV 6
 #define RCV_DATA 7
 #define BCC2_RCV 8
+#define INITIAL_PARITY 0xff
 #define TIME_OUT 3
 #define MAX_ALARM_CALLS 3
 #define ESC 0x7d
-#define MAX_DATA_SIZE 65535	/* 2^(16 bits) - 1 --> application data field 'length' has 2 bytes */
+#define MAX_APP_DATA_SIZE 65535	/* 2^(16 bits) - 1 --> application data field 'length' has 2 bytes */
 #define MAX_SIZE 1048576 /* 1MB */
 #define FILE_SIZE_INDICATOR 0
 #define FILE_NAME_INDICATOR 1

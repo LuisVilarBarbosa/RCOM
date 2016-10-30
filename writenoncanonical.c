@@ -129,7 +129,7 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				data_size++;
 			}
 		}
-		int parity = 0xff;
+		int parity = INITIAL_PARITY;
 		for (i = 0; i < length; i++) {
 			parity = (parity ^ buffer[i]);
 		}
@@ -320,8 +320,8 @@ int writeToSerial(int fd, char filename[], int frame_length) {
 	appPacket[2] = sizeof(unsigned long); // 'length' is stored in an ulong
 	appPacketSize = 3;
 
-	int i;
-	for (i = 0; i < sizeof(unsigned long); i++) {
+	unsigned long i;
+	for (i = 0; i < (int)sizeof(unsigned long); i++) {
 		appPacket[appPacketSize] = sizeInPackets[i];
 		appPacketSize++;
 	}
@@ -340,10 +340,9 @@ int writeToSerial(int fd, char filename[], int frame_length) {
 	stats.sentPackets++;
 
 	//sending packets
-	unsigned char fileData[MAX_DATA_SIZE];
-	unsigned char fileToSend[MAX_DATA_SIZE];
-	unsigned long size_read = 0;
-	unsigned char sequenceNum = 0;
+	unsigned char fileData[MAX_APP_DATA_SIZE];
+	unsigned char fileToSend[MAX_SIZE];
+	unsigned int size_read = 0, sequenceNum = 0;
 	unsigned long sentBytes = 0;
 	while ((size_read = read(dataFd, fileData, frame_length))) {
 		fileToSend[0] = C_DATA;
@@ -361,8 +360,9 @@ int writeToSerial(int fd, char filename[], int frame_length) {
 	}
 
 	// end packet (similar to start packet)
-	/*appPacket[0] = C_END;
-	llwrite(fd, appPacket, appPacketSize);*/
+	appPacket[0] = C_END;
+	llwrite(fd, appPacket, appPacketSize);
+	stats.sentPackets++;
 
 	close(dataFd);
 	if (llclose(fd) != 0)
@@ -394,7 +394,7 @@ int main(int argc, char** argv)
 	max_alarm_calls = atoi(argv[5]);
 	time_out = atoi(argv[6]);
 
-	if (frame_length < 1 || frame_length > MAX_DATA_SIZE || max_alarm_calls < 0 || time_out <= 0) {
+	if (frame_length < 1 || frame_length > MAX_APP_DATA_SIZE || max_alarm_calls < 0 || time_out <= 0) {
 		printf("At least one value is invalid.\n");
 		exit(-1);
 	}
