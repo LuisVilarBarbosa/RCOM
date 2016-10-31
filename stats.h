@@ -36,7 +36,6 @@ void printStatistics(Statistics stats) {
 	printf("Received REJ:     %d\n", stats.receivedREJ);
 	printf("\n");
 	printf("Received bytes:   %d\n", stats.receivedBytes);
-	printf("Sent bytes:      %d\n", stats.sentBytes);
 	printf("FileSize:         %lu bytes\n", stats.fileSize);
 	printf("\n");
 	printf("Sent packets:     %d\n", stats.sentPackets);

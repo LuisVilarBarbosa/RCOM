@@ -344,7 +344,7 @@ int receiveAppControlPacket(int fd, int expected_C, unsigned long *file_size, ch
 			length = appControlPacket[i];
 			initialN = i;
 			for (k = 1; k <= length; k++) {
-				filename[k - 1] += appControlPacket[initialN + k];
+				filename[k - 1] = appControlPacket[initialN + k];
 				i++;
 			}
 			i++;
