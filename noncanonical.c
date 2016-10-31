@@ -128,9 +128,13 @@ int llread(int fd, unsigned char *buffer)
 			printf("A problem occurred reading on 'llread'.\n");
 		stats.receivedBytes++;
 
-		if ((rand() % 10000) == 1) {	// generate random error
+		if ((rand() % 10000) == 1) {	// generate random loss
 			ch = ch ^ (rand() % 32);
-			printf("Pseudo-random information byte error generated.\n");
+			printf("Pseudo-random information frame byte loss generated.\n");
+		}
+		if ((rand() % 10000) == 10) {	// generate random error
+			ch = ch ^ (rand() % 32);
+			printf("Pseudo-random information frame byte error generated.\n");
 		}
 
 		switch (state) {
@@ -205,7 +209,18 @@ int llread(int fd, unsigned char *buffer)
 	data[3] = data[1] ^ data[2];
 	data[4] = F;
 	data_size = 5;
-	write(write_fd, data, data_size);
+	if ((rand() % 10000) == 1)	// generate random loss
+		printf("Pseudo-random RR frame loss generated.\n");
+	else if ((rand() % 10000) == 10) {	// generate random error
+		int x = rand() % data_size;
+		unsigned char origDataX = data[x];
+		data[x] = data[x] ^ (rand() % 32);
+		printf("Pseudo-random RR frame byte error generated.\n");
+		write(write_fd, data, data_size);
+		data[x] = origDataX;	// to 'alarm_answer' resend the correct value
+	}
+	else
+		write(write_fd, data, data_size);
 	stats.sentRR++;
 	stats.sentBytes += data_size;
 	stats.sentFrames++;
