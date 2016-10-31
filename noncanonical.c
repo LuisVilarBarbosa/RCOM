@@ -351,7 +351,7 @@ int receiveAppControlPacket(int fd, int expected_C, unsigned long *file_size, ch
 			break;
 		default:
 			printf("Error receiving the control fields.\n");
-			break;
+			return -1;
 		}
 	}
 	stats.receivedPackets++;
