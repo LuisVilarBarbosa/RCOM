@@ -423,7 +423,7 @@ int receiveFromSerial(int fd) {
 
 		i += numOcte;
 		sequenceNum = (sequenceNum + 1) % 255;
-		printf("Bytes received: %lu.\n", i);
+		printf("Received bytes: %lu.\n", i);
 	}
 
 	unsigned long file_size2 = 0;

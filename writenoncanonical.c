@@ -340,7 +340,7 @@ int writeToSerial(int fd, char filename[], int frame_length) {
 	llwrite(fd, appPacket, appPacketSize);
 	stats.sentPackets++;
 
-	// sending packets
+	// sending data packets
 	unsigned char fileData[MAX_APP_DATA_SIZE];
 	unsigned char fileToSend[MAX_SIZE];
 	unsigned int size_read = 0, sequenceNum = 0;
@@ -357,7 +357,7 @@ int writeToSerial(int fd, char filename[], int frame_length) {
 		stats.sentPackets++;
 		sentBytes += size_read;
 		sequenceNum = (sequenceNum + 1) % 255;
-		printf("Bytes enviados: %lu.\n", sentBytes);
+		printf("Sent bytes: %lu.\n", sentBytes);
 	}
 
 	// end packet (similar to start packet)
