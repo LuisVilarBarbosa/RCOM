@@ -516,5 +516,7 @@ int main(int argc, char** argv)
 		exit(-1);
 	}
 
+	if (close(fd) != 0) { perror(argv[1]); }
+
 	return 0;
 }
