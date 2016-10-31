@@ -363,6 +363,7 @@ int receiveAppControlPacket(int fd, int expected_C, unsigned long *file_size, ch
 				i++;
 			}
 			i++;
+			filename[length] = '\0';
 			break;
 		default:
 			printf("Error receiving the control fields.\n");
