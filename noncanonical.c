@@ -492,9 +492,13 @@ int main(int argc, char** argv)
 
 	srand((unsigned)time(NULL));
 
-	receiveFromSerial(fd);
+	if (receiveFromSerial(fd) == -1)
+		return -1;
 
-	tcsetattr(fd, TCSANOW, &oldtio);
+	if (tcsetattr(fd, TCSANOW, &oldtio) == -1) {
+		perror("tcsetattr");
+		exit(-1);
+	}
 
 	return 0;
 }
