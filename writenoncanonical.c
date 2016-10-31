@@ -168,6 +168,8 @@ int llwrite(int fd, unsigned char *buffer, int length)
 			case FLAG_RCV:
 				if (ch == A_RECEIVER_TO_SENDER_ANSWER)
 					state = A_RCV;
+				else if (ch == F)
+					state = FLAG_RCV;
 				else {
 					state = STOP_SM;
 					repeat = TRUE;
@@ -187,6 +189,8 @@ int llwrite(int fd, unsigned char *buffer, int length)
 					printf("Position jumped - pos: %02d\n", pos);
 					exit(-1);
 				}
+				else if (ch == F)
+					state = FLAG_RCV;
 				else {
 					state = STOP_SM;
 					repeat = TRUE;
@@ -196,6 +200,8 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				if (ch == (A_RECEIVER_TO_SENDER_ANSWER ^ C_RR((pos + 1) % 2)) ||
 					ch == (A_RECEIVER_TO_SENDER_ANSWER ^ C_REJ(pos)))
 					state = BCC1_RCV;
+				else if (ch == F)
+					state = FLAG_RCV;
 				else {
 					state = STOP_SM;
 					repeat = TRUE;

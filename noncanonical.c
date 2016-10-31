@@ -144,16 +144,22 @@ int llread(int fd, unsigned char *buffer)
 		case FLAG_RCV:
 			if (ch == A_SENDER_TO_RECEIVER_CMD)
 				state = A_RCV;
+			else if (ch == F)
+				state = FLAG_RCV;
 			else state = START;
 			break;
 		case A_RCV:
 			if (ch == C_SEND(pos))
 				state = C_RCV;
+			else if (ch == F)
+				state = FLAG_RCV;
 			else state = START;
 			break;
 		case C_RCV:
 			if (ch == (A_SENDER_TO_RECEIVER_CMD ^ C_SEND(pos)))	// BCC1
 				state = RCV_DATA;
+			else if (ch == F)
+				state = FLAG_RCV;
 			else state = START;
 			break;
 		case RCV_DATA:
@@ -354,8 +360,10 @@ int receiveAppControlPacket(int fd, int expected_C, unsigned long *file_size, ch
 }
 
 int receiveFromSerial(int fd) {
-	if (llopen(fd) == -1)
+	if (llopen(fd) == -1) {
 		printf("Error occurred executing 'llopen'.\n");
+		return -1;
+	}
 
 	stats = initStatistics();
 
