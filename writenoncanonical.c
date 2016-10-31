@@ -217,10 +217,8 @@ int llwrite(int fd, unsigned char *buffer, int length)
 				break;
 			}
 
-			if (repeat == TRUE) {
-				sleep(1);	// wait that all the bytes are written by the receiver
+			if (repeat == TRUE)
 				tcflush(fd, TCIOFLUSH);
-			}
 		}
 		alarmOff();
 	}

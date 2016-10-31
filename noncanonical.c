@@ -40,7 +40,6 @@ void answer_alarm()
 void sendREJ(int fd, int position) {
 	// Supervision frame in case of failure
 	stats.sentREJ++;
-	sleep(1);
 	tcflush(fd, TCIOFLUSH);
 	data[0] = F;
 	data[1] = A_RECEIVER_TO_SENDER_ANSWER;
@@ -123,6 +122,7 @@ int llread(int fd, unsigned char *buffer)
 	int parity = INITIAL_PARITY;
 	unsigned char ch;
 
+	alarmOn();
 	while (state != STOP_SM) {
 		if (read(fd, &ch, 1) != 1)
 			printf("A problem occurred reading on 'llread'.\n");
@@ -193,6 +193,7 @@ int llread(int fd, unsigned char *buffer)
 			break;
 		}
 	}
+	alarmOff();
 	stats.receivedFrames++;
 
 	pos = (pos + 1) % 2;
