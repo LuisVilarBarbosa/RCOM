@@ -382,9 +382,8 @@ int receiveFromSerial(int fd) {
 	}
 
 	unsigned char llreadData[MAX_SIZE];
-	unsigned char fileData[MAX_SIZE];
 
-	unsigned long i = 0, j, receivedBytes, sequenceNum = 0, numOcte;
+	unsigned long i = 0, receivedBytes, sequenceNum = 0, numOcte;
 
 	while (i < file_size) {
 		receivedBytes = llread(fd, llreadData);
@@ -405,11 +404,7 @@ int receiveFromSerial(int fd) {
 			printf("Expected %lu bytes, received %lu.\n", numOcte, receivedBytes - 4);
 			return -1;
 		}
-		j = 0;
-		while (j < numOcte) {
-			fileData[i + j] = llreadData[j + 4];
-			j++;
-		}
+		write(dataFd, &llreadData[4], numOcte);
 
 		i += numOcte;
 		sequenceNum = (sequenceNum + 1) % 255;
@@ -423,7 +418,6 @@ int receiveFromSerial(int fd) {
 	if (file_size != file_size2 || strcmp(filename, filename2) != 0)
 		printf("File size and/or filename mismatch:\nFirst received: %lu - %s\nLast received: %lu - %s\n", file_size, filename, file_size2, filename2);
 
-	write(dataFd, fileData, file_size);
 	close(dataFd);
 	if (llclose(fd) != 0)
 		printf("Error occurred executing 'llclose'.\n");

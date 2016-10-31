@@ -43,7 +43,7 @@
 #define MAX_ALARM_CALLS 3
 #define ESC 0x7d
 #define MAX_APP_DATA_SIZE 65535	/* 2^(16 bits) - 1 --> application data field 'length' has 2 bytes */
-#define MAX_SIZE 1048576 /* 1MB */
+#define MAX_SIZE 66560 /* 65KB -> MAX_APP_DATA_SIZE + some space for layer fields */
 #define FILE_SIZE_INDICATOR 0
 #define FILE_NAME_INDICATOR 1
 
