@@ -185,10 +185,6 @@ int llwrite(int fd, unsigned char *buffer, int length)
 					repeat = TRUE;
 					stats.receivedREJ++;
 				}
-				else if (ch == C_REJ((pos + 1) % 2)) {
-					printf("Position jumped - pos: %02d\n", pos);
-					exit(-1);
-				}
 				else if (ch == F)
 					state = FLAG_RCV;
 				else {
