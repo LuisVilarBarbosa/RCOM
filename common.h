@@ -1,3 +1,6 @@
+#ifndef COMMON_H
+#define COMMON_H
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -77,3 +80,5 @@ void chooseBaudrate(char *str, tcflag_t *baudrate)
 		exit(-2);
 	}
 }
+
+#endif

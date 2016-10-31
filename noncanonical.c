@@ -143,7 +143,7 @@ int llread(int fd, unsigned char *buffer)
 			parity = INITIAL_PARITY;
 			if (ch == F)
 				state = FLAG_RCV;
-			// else state = START;
+			//else state = START;
 			break;
 		case FLAG_RCV:
 			if (ch == A_SENDER_TO_RECEIVER_CMD)

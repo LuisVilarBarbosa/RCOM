@@ -344,7 +344,7 @@ int writeToSerial(int fd, char filename[], int frame_length) {
 	llwrite(fd, appPacket, appPacketSize);
 	stats.sentPackets++;
 
-	//sending packets
+	// sending packets
 	unsigned char fileData[MAX_APP_DATA_SIZE];
 	unsigned char fileToSend[MAX_SIZE];
 	unsigned int size_read = 0, sequenceNum = 0;

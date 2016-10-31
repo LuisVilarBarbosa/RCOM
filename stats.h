@@ -1,3 +1,6 @@
+#ifndef STATS_H
+#define STATS_H
+
 typedef struct {
 	int sentFrames;
 	int receivedFrames;
@@ -66,3 +69,5 @@ Statistics initStatistics() {
 
 	return stats;
 }
+
+#endif
