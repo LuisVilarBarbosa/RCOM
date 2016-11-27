@@ -40,7 +40,7 @@ int main(int argc, char** argv)
 		switch (state)
 		{
 		case START_SM:
-			if (strncmp(argv[1], "ftp://", 6) == 0) {
+			if (strncasecmp(argv[1], "ftp://", 6) == 0) {
 				state = USER_SM;
 				pos = 6;
 			}
