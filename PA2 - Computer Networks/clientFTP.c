@@ -15,6 +15,15 @@
 #define STOP_SM 5
 #define ERROR_SM 6
 
+size_t find_pos(char *str, char toFind, size_t startPos)
+{
+	int endPos;
+	for (endPos = startPos; str[endPos] != '\0'; endPos++)
+		if (str[endPos] == toFind)
+			break;
+	return endPos;
+}
+
 // substitutes 'strncpy', because 'strncpy' does not add '\0' when it is not present
 void copy_string(char *dest, char *src, size_t n)
 {
@@ -34,7 +43,7 @@ int main(int argc, char** argv)
 	// split ftp address
 	char user[STRINGS_SIZE], password[STRINGS_SIZE], hostname[STRINGS_SIZE];
 	char url_path[STRINGS_SIZE], state = START_SM;
-	size_t pos, i;
+	size_t startPos, endPos;
 
 	while (state != STOP_SM) {
 		switch (state)
@@ -42,7 +51,7 @@ int main(int argc, char** argv)
 		case START_SM:
 			if (strncasecmp(argv[1], "ftp://", 6) == 0) {
 				state = USER_SM;
-				pos = 6;
+				startPos = 6;
 			}
 			else {
 				printf("Invalid URL syntax.\n");
@@ -50,50 +59,44 @@ int main(int argc, char** argv)
 			}
 			break;
 		case USER_SM:
-			for (i = pos; argv[1][i] != '\0'; i++)
-				if (argv[1][i] == ':')
-					break;
-			if (argv[1][i] == '\0')
+			endPos = find_pos(argv[1], ':', startPos);
+			if (argv[1][endPos] == '\0')
 				state = HOST_SM;	// No user neither password indicated
 			else {
-				copy_string(user, &argv[1][pos], i - pos);
+				copy_string(user, &argv[1][startPos], endPos - startPos);
 				printf("User: %s\n", user);
 				state = PASSWORD_SM;
-				pos = i + 1;
+				startPos = endPos + 1;
 			}
 			break;
 		case PASSWORD_SM:
-			for (i = pos; argv[1][i] != '\0'; i++)
-				if (argv[1][i] == '@')
-					break;
-			if (argv[1][i] == '\0') {
+			endPos = find_pos(argv[1], '@', startPos);
+			if (argv[1][endPos] == '\0') {
 				printf("'@' not found.\n");
 				state = ERROR_SM;
 			}
 			else {
-				copy_string(password, &argv[1][pos], i - pos);
+				copy_string(password, &argv[1][startPos], endPos - startPos);
 				printf("Password: %s\n", password);
 				state = HOST_SM;
-				pos = i + 1;
+				startPos = endPos + 1;
 			}
 			break;
 		case HOST_SM:
-			for (i = pos; argv[1][i] != '\0'; i++)
-				if (argv[1][i] == '/')
-					break;
-			if (argv[1][i] == '\0') {
+			endPos = find_pos(argv[1], '/', startPos);
+			if (argv[1][endPos] == '\0') {
 				printf("Host not found.\n");
 				state = ERROR_SM;
 			}
 			else {
-				copy_string(hostname, &argv[1][pos], i - pos);
+				copy_string(hostname, &argv[1][startPos], endPos - startPos);
 				printf("Host name: %s\n", hostname);
 				state = URL_PATH_SM;
-				pos = i + 1;
+				startPos = endPos + 1;
 			}
 			break;
 		case URL_PATH_SM:
-			copy_string(url_path, &argv[1][pos], STRINGS_SIZE);
+			copy_string(url_path, &argv[1][startPos], STRINGS_SIZE);
 			printf("URL path: %s\n", url_path);
 			state = STOP_SM;
 			break;
