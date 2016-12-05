@@ -16,7 +16,7 @@
 #define URL_PATH_SM 4
 #define STOP_SM 5
 #define ERROR_SM 6
-#define SERVER_PORT 6000
+#define SERVER_PORT 21
 
 size_t find_pos(char *str, char toFind, size_t startPos)
 {
