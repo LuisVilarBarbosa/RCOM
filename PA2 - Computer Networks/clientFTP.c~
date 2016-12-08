@@ -9,7 +9,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <string.h>
 
 #define BUFFER_SIZE 256
 #define BUFFER_LENGTH BUFFER_SIZE - 1
@@ -39,7 +38,6 @@ void copy_string(char *dest, char *src, size_t n)
 		dest[i] = src[i];
 	dest[i] = '\0';
 }
-
 
 void split_ftp_address(char *ftp_address, char *user, char *password, char *hostname, char *url_path)
 {
@@ -73,21 +71,17 @@ void split_ftp_address(char *ftp_address, char *user, char *password, char *host
 				startPos = endPos + 1;
 			}
 			break;
-		case PASSWORD_SM: ;
-  			char *pch;
-  			pch=strrchr(ftp_address,'@');
-  			int indexOfLastAt = pch - ftp_address+1;
-
+		case PASSWORD_SM:
 			endPos = find_pos(ftp_address, '@', startPos);
 			if (ftp_address[endPos] == '\0') {
 				printf("'@' not found.\n");
 				state = ERROR_SM;
 			}
 			else {
-				copy_string(password, &ftp_address[startPos], indexOfLastAt - 1 - startPos);
+				copy_string(password, &ftp_address[startPos], endPos - startPos);
 				printf("Password: %s\n", password);
 				state = HOST_SM;
-				startPos = indexOfLastAt;
+				startPos = endPos + 1;
 			}
 			break;
 		case HOST_SM:
@@ -172,7 +166,7 @@ void read_from_socket2(int sockfd)
 }
 
 int main(int argc, char** argv)
-{  	
+{
 	if (argc != 2) {
 		printf("Usage: %s <ftp address>\n", argv[0]);
 		exit(-1);
