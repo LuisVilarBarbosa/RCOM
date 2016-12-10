@@ -173,7 +173,7 @@ void write_to_socket(int sockfd, char *str)
 	printf("> %s", str);
 }
 
-void read_from_socket1(int sockfd, char *str)
+void read_from_socket(int sockfd, char *str)
 {
 	int bytes = read(sockfd, str, BUFFER_LENGTH);
 	if (bytes < 0) {
@@ -185,10 +185,14 @@ void read_from_socket1(int sockfd, char *str)
 	printf("< %s", str);
 }
 
-void read_from_socket2(int sockfd)
+void verify_answer(int sockfd, int expectedAnswer, char *str)
 {
-	char str[BUFFER_SIZE];
-	read_from_socket1(sockfd, str);
+	read_from_socket(sockfd, str);
+	int val = atoi(str);
+	if (val != expectedAnswer) {
+		printf("Expected answer code '%d', but received '%d'.\n", expectedAnswer, val);
+		exit(-1);
+	}
 }
 
 int main(int argc, char** argv)
@@ -215,21 +219,21 @@ int main(int argc, char** argv)
 	int	sockfd = new_connection(server_address, DEFAULT_FTP_PORT);
 
 	char buf[BUFFER_SIZE];
-	read_from_socket2(sockfd);
+	verify_answer(sockfd, 220, buf);
 
 	// login host
 	sprintf(buf, "user %s\r\n", user);
 	write_to_socket(sockfd, buf);
-	read_from_socket2(sockfd);
+	verify_answer(sockfd, 331, buf);
 
 	sprintf(buf, "pass %s\r\n", password);
 	write_to_socket(sockfd, buf);
-	read_from_socket2(sockfd);
+	verify_answer(sockfd, 230, buf);
 
 	// enter passive mode
 	sprintf(buf, "pasv\r\n");
 	write_to_socket(sockfd, buf);
-	read_from_socket1(sockfd, buf);
+	verify_answer(sockfd, 227, buf);
 
 	if (close(sockfd) < 0)
 		perror("close()");
@@ -239,6 +243,7 @@ int main(int argc, char** argv)
 	// get path
 	sprintf(buf, "retr /%s\r\n", url_path);
 	write_to_socket(sockfd, buf);
+	verify_answer(sockfd, 125, buf);
 
 	// receive data
 	char *filename = strrchr(url_path, '/') + 1;
@@ -264,7 +269,7 @@ int main(int argc, char** argv)
 	// close connection
 	sprintf(buf, "quit\r\n");
 	write_to_socket(sockfd, buf);
-	read_from_socket2(sockfd);
+	verify_answer(sockfd, 221, buf);
 
 	if (close(sockfd) < 0)
 		perror("close()");
