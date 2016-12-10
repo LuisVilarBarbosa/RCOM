@@ -258,6 +258,12 @@ int main(int argc, char** argv)
 	}
 	if (close(fd) < 0)
 		perror("close()");
+
+	// close connection
+	sprintf(buf, "QUIT\r\n");
+	write_to_socket(sockfd, buf);
+	read_from_socket2(sockfd);
+
 	if (close(sockfd) < 0)
 		perror("close()");
 
