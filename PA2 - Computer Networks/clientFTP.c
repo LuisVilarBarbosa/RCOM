@@ -132,7 +132,26 @@ struct sockaddr_in generate_sockaddr_in(char *server_address, uint16_t server_po
 	return server_addr;
 }
 
-struct sockaddr_in calculate_sockaddr_in(char *str)
+int new_connection(char *server_address, uint16_t server_port)
+{
+	int sockfd;
+	struct sockaddr_in server_addr = generate_sockaddr_in(server_address, server_port);
+	/*open an TCP socket*/
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("socket()");
+		exit(-1);
+	}
+	/*connect to the server*/
+	if (connect(sockfd,
+		(struct sockaddr *)&server_addr,
+		sizeof(server_addr)) < 0) {
+		perror("connect()");
+		exit(-1);
+	}
+	return sockfd;
+}
+
+int new_passive_connection(char *str)
 {
 	int ip[4];
 	int port[2];
@@ -140,7 +159,7 @@ struct sockaddr_in calculate_sockaddr_in(char *str)
 	char server_address[16];
 	sprintf(server_address, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 	uint16_t server_port = (port[0] << 8) + port[1];
-	return generate_sockaddr_in(server_address, server_port);
+	return new_connection(server_address, server_port);
 }
 
 void write_to_socket(int sockfd, char *str)
@@ -192,20 +211,7 @@ int main(int argc, char** argv)
 	printf("IP Address : %s\n", server_address);
 
 	// connect via socket
-	int	sockfd;
-	struct sockaddr_in server_addr = generate_sockaddr_in(server_address, DEFAULT_FTP_PORT);
-	/*open an TCP socket*/
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("socket()");
-		exit(-1);
-	}
-	/*connect to the server*/
-	if (connect(sockfd,
-		(struct sockaddr *)&server_addr,
-		sizeof(server_addr)) < 0) {
-		perror("connect()");
-		exit(-1);
-	}
+	int	sockfd = new_connection(server_address, DEFAULT_FTP_PORT);
 
 	char buf[BUFFER_SIZE];
 	read_from_socket2(sockfd);
@@ -227,21 +233,7 @@ int main(int argc, char** argv)
 	if (close(sockfd) < 0)
 		perror("close()");
 
-	/*open an TCP socket*/
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("socket()");
-		exit(-1);
-	}
-
-	server_addr = calculate_sockaddr_in(buf);
-
-	/*connect to the server*/
-	if (connect(sockfd,
-		(struct sockaddr *)&server_addr,
-		sizeof(server_addr)) < 0) {
-		perror("connect()");
-		exit(-1);
-	}
+	sockfd = new_passive_connection(buf);
 
 	// get path
 	sprintf(buf, "RETR /%s\n", url_path);
