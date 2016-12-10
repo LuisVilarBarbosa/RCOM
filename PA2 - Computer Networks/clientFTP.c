@@ -240,10 +240,11 @@ int main(int argc, char** argv)
 	write_to_socket(sockfd, buf);
 
 	// receive data
-	int bytes = -1, fd = open(url_path, O_CREAT | O_WRONLY | O_EXCL | O_TRUNC);
+	char *filename = strrchr(url_path, '/') + 1;
+	int bytes = -1, fd = open(filename, O_CREAT | O_WRONLY | O_EXCL | O_TRUNC);
 	if (fd < 0) {
 		perror("open()");
-		printf("Error opening the file '%s'.\n", url_path);
+		printf("Error opening the file '%s'.\n", filename);
 		exit(-1);
 	}
 	while (bytes) {
