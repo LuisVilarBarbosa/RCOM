@@ -216,34 +216,31 @@ int main(int argc, char** argv)
 	printf("IP Address : %s\n", server_address);
 
 	// connect via socket
-	int	sockfd = new_connection(server_address, DEFAULT_FTP_PORT);
+	int	sockfd1 = new_connection(server_address, DEFAULT_FTP_PORT);
 
 	char buf[BUFFER_SIZE];
-	verify_answer(sockfd, 220, buf);
+	verify_answer(sockfd1, 220, buf);
 
 	// login host
 	sprintf(buf, "user %s\r\n", user);
-	write_to_socket(sockfd, buf);
-	verify_answer(sockfd, 331, buf);
+	write_to_socket(sockfd1, buf);
+	verify_answer(sockfd1, 331, buf);
 
 	sprintf(buf, "pass %s\r\n", password);
-	write_to_socket(sockfd, buf);
-	verify_answer(sockfd, 230, buf);
+	write_to_socket(sockfd1, buf);
+	verify_answer(sockfd1, 230, buf);
 
 	// enter passive mode
 	sprintf(buf, "pasv\r\n");
-	write_to_socket(sockfd, buf);
-	verify_answer(sockfd, 227, buf);
+	write_to_socket(sockfd1, buf);
+	verify_answer(sockfd1, 227, buf);
 
-	if (close(sockfd) < 0)
-		perror("close()");
-
-	sockfd = new_passive_connection(buf);
+	sockfd2 = new_passive_connection(buf);
 
 	// get path
 	sprintf(buf, "retr %s\r\n", url_path);
-	write_to_socket(sockfd, buf);
-	verify_answer(sockfd, 125, buf);
+	write_to_socket(sockfd2, buf);
+	verify_answer(sockfd2, 125, buf);
 
 	// receive data
 	char *filename = strrchr(url_path, '/') + 1;
@@ -254,7 +251,7 @@ int main(int argc, char** argv)
 		bytes = 0;
 	}
 	while (bytes) {
-		if ((bytes = read(sockfd, buf, BUFFER_SIZE)) < 0) {
+		if ((bytes = read(sockfd2, buf, BUFFER_SIZE)) < 0) {
 			perror("read()");
 			bytes = 0;
 		}
@@ -268,10 +265,13 @@ int main(int argc, char** argv)
 
 	// close connection
 	sprintf(buf, "quit\r\n");
-	write_to_socket(sockfd, buf);
-	verify_answer(sockfd, 221, buf);
+	write_to_socket(sockfd2, buf);
+	verify_answer(sockfd2, 221, buf);
 
-	if (close(sockfd) < 0)
+	if (close(sockfd2) < 0)
+		perror("close()");
+
+	if (close(sockfd1) < 0)
 		perror("close()");
 
 	// indicate success(file saved in current working directory)
