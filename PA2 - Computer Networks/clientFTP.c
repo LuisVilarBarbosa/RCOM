@@ -245,16 +245,16 @@ int main(int argc, char** argv)
 	if (fd < 0) {
 		perror("open()");
 		printf("Error opening the file '%s'.\n", filename);
-		exit(-1);
+		bytes = 0;
 	}
 	while (bytes) {
 		if ((bytes = read(sockfd, buf, BUFFER_SIZE)) < 0) {
 			perror("read()");
-			exit(-1);
+			bytes = 0;
 		}
 		if (write(fd, buf, bytes) != bytes) {
 			perror("write()");
-			exit(-1);
+			bytes = 0;
 		}
 	}
 	if (close(fd) < 0)
