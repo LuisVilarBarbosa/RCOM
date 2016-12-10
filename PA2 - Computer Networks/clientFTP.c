@@ -217,16 +217,16 @@ int main(int argc, char** argv)
 	read_from_socket2(sockfd);
 
 	// login host
-	sprintf(buf, "USER %s\n", user);
+	sprintf(buf, "USER %s\r\n", user);
 	write_to_socket(sockfd, buf);
 	read_from_socket2(sockfd);
 
-	sprintf(buf, "PASS %s\n", password);
+	sprintf(buf, "PASS %s\r\n", password);
 	write_to_socket(sockfd, buf);
 	read_from_socket2(sockfd);
 
 	// enter passive mode
-	sprintf(buf, "PASV\n");
+	sprintf(buf, "PASV\r\n");
 	write_to_socket(sockfd, buf);
 	read_from_socket1(sockfd, buf);
 
@@ -236,7 +236,7 @@ int main(int argc, char** argv)
 	sockfd = new_passive_connection(buf);
 
 	// get path
-	sprintf(buf, "RETR /%s\n", url_path);
+	sprintf(buf, "RETR /%s\r\n", url_path);
 	write_to_socket(sockfd, buf);
 
 	// receive data
