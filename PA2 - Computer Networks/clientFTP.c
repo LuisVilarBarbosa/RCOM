@@ -170,6 +170,7 @@ void write_to_socket(int sockfd, char *str)
 		printf("Error writing to the socket: %s", str);
 		exit(-1);
 	}
+	printf("> %s", str);
 }
 
 void read_from_socket1(int sockfd, char *str)
@@ -181,7 +182,7 @@ void read_from_socket1(int sockfd, char *str)
 		exit(-1);
 	}
 	str[bytes] = '\0';
-	printf("%s", str);
+	printf("< %s", str);
 }
 
 void read_from_socket2(int sockfd)
