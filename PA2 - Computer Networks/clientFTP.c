@@ -276,6 +276,7 @@ int main(int argc, char** argv)
 
 	// indicate success(file saved in current working directory)
 	// or indicate un-success(indicating failing phase) where it occurs
+	printf("Download complete.\n");
 
 	return 0;
 }
