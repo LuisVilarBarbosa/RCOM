@@ -74,20 +74,16 @@ void split_ftp_address(char *ftp_address, char *user, char *password, char *host
 			}
 			break;
 		case PASSWORD_SM: ;
-  			char *pch;
-  			pch=strrchr(ftp_address,'@');
-  			int indexOfLastAt = pch - ftp_address+1;
-
 			endPos = find_pos(ftp_address, '@', startPos);
 			if (ftp_address[endPos] == '\0') {
 				printf("'@' not found.\n");
 				state = ERROR_SM;
 			}
 			else {
-				copy_string(password, &ftp_address[startPos], indexOfLastAt - 1 - startPos);
+				copy_string(password, &ftp_address[startPos], endPos - startPos);
 				printf("Password: %s\n", password);
 				state = HOST_SM;
-				startPos = indexOfLastAt;
+				startPos = endPos + 1;
 			}
 			break;
 		case HOST_SM:
