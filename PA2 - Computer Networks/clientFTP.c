@@ -235,7 +235,7 @@ int main(int argc, char** argv)
 	write_to_socket(sockfd1, buf);
 	verify_answer(sockfd1, 227, buf);
 
-	sockfd2 = new_passive_connection(buf);
+	int sockfd2 = new_passive_connection(buf);
 
 	// get path
 	sprintf(buf, "retr %s\r\n", url_path);
