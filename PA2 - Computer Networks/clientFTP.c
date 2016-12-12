@@ -240,7 +240,7 @@ int main(int argc, char** argv)
 	
 	// receive data
 	char *filename = strrchr(url_path, '/') + 1;
-	int bytes = -1, fd = open(filename, O_CREAT | O_WRONLY | O_EXCL | O_TRUNC);
+	int bytes = -1, fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC);
 	if (fd < 0) {
 		perror("open()");
 		printf("Error opening the file '%s'.\n", filename);
