@@ -235,9 +235,9 @@ int main(int argc, char** argv)
 
 	// get path
 	sprintf(buf, "retr %s\r\n", url_path);
-	write_to_socket(sockfd2, buf);
-	verify_answer(sockfd2, 125, buf);
-
+	write_to_socket(sockfd1, buf);
+	verify_answer(sockfd1, 150, buf);
+	
 	// receive data
 	char *filename = strrchr(url_path, '/') + 1;
 	int bytes = -1, fd = open(filename, O_CREAT | O_WRONLY | O_EXCL | O_TRUNC);
@@ -259,10 +259,12 @@ int main(int argc, char** argv)
 	if (close(fd) < 0)
 		perror("close()");
 
+	verify_answer(sockfd1, 226, buf);
+
 	// close connection
 	sprintf(buf, "quit\r\n");
-	write_to_socket(sockfd2, buf);
-	verify_answer(sockfd2, 221, buf);
+	write_to_socket(sockfd1, buf);
+	verify_answer(sockfd1, 221, buf);
 
 	if (close(sockfd2) < 0)
 		perror("close()");
