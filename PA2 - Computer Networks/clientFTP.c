@@ -270,8 +270,6 @@ int main(int argc, char** argv)
 	if (close(sockfd1) < 0)
 		perror("close()");
 
-	// indicate success(file saved in current working directory)
-	// or indicate un-success(indicating failing phase) where it occurs
 	printf("Download complete.\n");
 
 	return 0;
